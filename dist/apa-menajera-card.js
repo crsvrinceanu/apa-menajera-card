@@ -7,7 +7,7 @@
  * - optional background switching rules (e.g. electric boiler ON -> alternative image)
  * - debug mode: click -> shows x,y in native background coordinates
  */
-const CARD_VERSION = "1.1.0";
+const CARD_VERSION = "1.1.2";
 const CARD_TAG = "apa-menajera-card";
 
 const DEFAULT_VIEWBOX = { w: 2048, h: 1365 };
@@ -100,7 +100,11 @@ class ApaMenajeraCard extends HTMLElement {
       markers: Array.isArray(config.markers) ? config.markers : [],
       flows: Array.isArray(config.flows) ? config.flows : [],
       debug: !!config.debug,
-      viewbox: config.viewbox ?? DEFAULT_VIEWBOX
+      viewbox: config.viewbox ?? DEFAULT_VIEWBOX,
+      imageFit: config.image_fit ?? "cover",          // cover | contain
+      imagePosition: config.image_position ?? "center", // e.g. center, top, bottom
+      maxWidth: config.max_width ?? "1100px",          // constrain card width on wide screens (e.g. 900px, 70rem)
+      maxHeight: config.max_height ?? null             // optional, e.g. 70vh
     };
     this._renderBase();
   }
@@ -254,7 +258,25 @@ class ApaMenajeraCard extends HTMLElement {
     this._els.bg = this.shadowRoot.getElementById("bg");
     this._els.svg = this.shadowRoot.getElementById("svg");
 
+
+    // Apply sizing constraints (responsive)
+    const haCard = this.shadowRoot.querySelector("ha-card");
+    if (haCard) {
+      haCard.style.width = "100%";
+      if (c.maxWidth) haCard.style.maxWidth = (typeof c.maxWidth === "number") ? `${c.maxWidth}px` : String(c.maxWidth);
+      haCard.style.margin = "0 auto";
+    }
+    if (c.maxHeight) {
+      const wrap = this.shadowRoot.getElementById("wrap");
+      if (wrap) {
+        wrap.style.maxHeight = (typeof c.maxHeight === "number") ? `${c.maxHeight}px` : String(c.maxHeight);
+      }
+    }
+
+
     this._els.bg.src = c.backgroundDefault;
+    this._els.bg.style.objectFit = c.imageFit || 'cover';
+    this._els.bg.style.objectPosition = c.imagePosition || 'center';
     this._last.bgSrc = c.backgroundDefault;
 
     this._buildSvgStatic();
