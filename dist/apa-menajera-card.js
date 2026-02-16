@@ -366,9 +366,9 @@ class ApaMenajeraCard extends HTMLElement {
         }
         .flow.active.animated {
           stroke-dasharray: 16 24;
-          animation: dash 1.1s linear infinite;
+          animation: dash 1.35s linear infinite;
         }
-        @keyframes dash { to { stroke-dashoffset: -56; } }
+        @keyframes dash { to { stroke-dashoffset: -40; } }
 
         /* Marker styling */
         .marker { pointer-events:auto; cursor:pointer; }
