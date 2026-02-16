@@ -1,15 +1,12 @@
-/* apa-menajera-card.js
- * Home Assistant custom Lovelace card (HACS plugin).
- * Background image + SVG overlay markers + animated flows.
- * Features:
- * - markers with optional alert rules (turn red on conditions / thresholds)
- * - multiple flows toggled by any entity state (on/off or select value)
- * - optional background switching rules (e.g. electric boiler ON -> alternative image)
- * - debug mode: click -> shows x,y in native background coordinates
+/* apa-menajera-card.js (HACS dashboard plugin)
+ * v1.1.3
+ * - background image (responsive)
+ * - optional overlay images toggled by entity state (PNG transparent)
+ * - SVG markers + animated flows
+ * - debug mode: click -> show x,y in background coordinates
  */
-const CARD_VERSION = "1.1.2";
+const CARD_VERSION = "1.1.3";
 const CARD_TAG = "apa-menajera-card";
-
 const DEFAULT_VIEWBOX = { w: 2048, h: 1365 };
 
 function fireEvent(node, type, detail = {}, options = {}) {
@@ -20,14 +17,6 @@ function fireEvent(node, type, detail = {}, options = {}) {
   });
   event.detail = detail;
   node.dispatchEvent(event);
-}
-
-function fmtState(stateObj) {
-  if (!stateObj) return "—";
-  const s = stateObj.state;
-  if (s === "unknown" || s === "unavailable") return "—";
-  const unit = stateObj.attributes?.unit_of_measurement ? stateObj.attributes.unit_of_measurement : "";
-  return unit ? `${s} ${unit}` : `${s}`;
 }
 
 function getEntity(hass, entityId) {
@@ -42,6 +31,14 @@ function norm(v) {
 function isActiveState(stateObj, activeState) {
   if (!stateObj) return false;
   return norm(stateObj.state) === norm(activeState ?? "on");
+}
+
+function fmtState(stateObj) {
+  if (!stateObj) return "—";
+  const s = stateObj.state;
+  if (s === "unknown" || s === "unavailable") return "—";
+  const unit = stateObj.attributes?.unit_of_measurement ? stateObj.attributes.unit_of_measurement : "";
+  return unit ? `${s} ${unit}` : `${s}`;
 }
 
 function numState(stateObj) {
@@ -59,12 +56,8 @@ class ApaMenajeraCard extends HTMLElement {
     this._config = null;
     this._hass = null;
     this._els = {};
-    this._last = {
-      markerText: new Map(),
-      activeFlows: new Map(),
-      bgSrc: null,
-    };
     this._markersUsed = [];
+    this._last = { markerText: new Map(), activeFlows: new Map(), bgSrc: null };
   }
 
   static getStubConfig() {
@@ -72,10 +65,12 @@ class ApaMenajeraCard extends HTMLElement {
       type: "custom:apa-menajera-card",
       title: "Apă menajeră",
       background: "/hacsfiles/apa-menajera-card/card.png",
-      entities: {},
+      overlays: [],
       markers: [],
       flows: [],
-      debug: false
+      debug: false,
+      image_fit: "contain",
+      max_width: "1100px",
     };
   }
 
@@ -96,16 +91,24 @@ class ApaMenajeraCard extends HTMLElement {
       title: config.title ?? "",
       backgroundDefault: bgDefault,
       backgroundWhen: bgWhen,
+
+      // NEW: overlays (images stacked above background)
+      // format: [{ entity, state: "on", image, opacity, fit, position }]
+      overlays: Array.isArray(config.overlays) ? config.overlays : [],
+
       entities: config.entities ?? {},
       markers: Array.isArray(config.markers) ? config.markers : [],
       flows: Array.isArray(config.flows) ? config.flows : [],
       debug: !!config.debug,
       viewbox: config.viewbox ?? DEFAULT_VIEWBOX,
-      imageFit: config.image_fit ?? "cover",          // cover | contain
-      imagePosition: config.image_position ?? "center", // e.g. center, top, bottom
-      maxWidth: config.max_width ?? "1100px",          // constrain card width on wide screens (e.g. 900px, 70rem)
-      maxHeight: config.max_height ?? null             // optional, e.g. 70vh
+
+      // responsive sizing
+      imageFit: config.image_fit ?? "contain",            // contain | cover
+      imagePosition: config.image_position ?? "center",
+      maxWidth: config.max_width ?? "1100px",             // e.g. "900px"
+      maxHeight: config.max_height ?? null                // e.g. "70vh"
     };
+
     this._renderBase();
   }
 
@@ -121,10 +124,13 @@ class ApaMenajeraCard extends HTMLElement {
     if (this._config) this._renderBase();
   }
 
+  _escape(s) {
+    return String(s).replace(/[&<>"']/g, (m) => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;" }[m]));
+  }
+
   _renderBase() {
     const c = this._config;
     if (!c) return;
-
     const vb = c.viewbox || DEFAULT_VIEWBOX;
 
     this.shadowRoot.innerHTML = `
@@ -142,21 +148,18 @@ class ApaMenajeraCard extends HTMLElement {
           top: 10px; left: 12px; right: 12px;
           display:flex; align-items:center; justify-content:space-between;
           pointer-events:none;
-          z-index: 3;
+          z-index: 5;
         }
         .title {
-          pointer-events:none;
-          font-weight: 600;
-          letter-spacing: .2px;
           padding: 6px 10px;
           border-radius: 12px;
           backdrop-filter: blur(8px);
           background: rgba(0,0,0,.35);
           color: var(--primary-text-color, #fff);
+          font-weight: 600;
           font-size: 14px;
         }
         .badge {
-          pointer-events:none;
           padding: 6px 10px;
           border-radius: 12px;
           backdrop-filter: blur(8px);
@@ -175,33 +178,48 @@ class ApaMenajeraCard extends HTMLElement {
           inset:0;
           width:100%;
           height:100%;
-          object-fit: cover;
+          object-fit: contain;
+          object-position: center;
           user-select:none;
           -webkit-user-drag:none;
         }
+
+        /* overlay images stacked above bg */
+        #ovls { position:absolute; inset:0; z-index:2; pointer-events:none; }
+        img.ovl {
+          position:absolute;
+          inset:0;
+          width:100%;
+          height:100%;
+          object-fit: contain;
+          object-position: center;
+          opacity: 1;
+          display:none;
+        }
+
         svg.overlay {
           position:absolute;
           inset:0;
           width:100%;
           height:100%;
-          pointer-events: none;
+          z-index:3;
+          pointer-events:none;
         }
 
         /* Flow styling */
         .flow {
-          fill: none;
-          stroke-linecap: round;
-          stroke-linejoin: round;
-          stroke-width: 10;
-          opacity: .0;
+          fill:none;
+          stroke-linecap:round;
+          stroke-linejoin:round;
+          stroke-width:10;
+          opacity:0;
           filter: drop-shadow(0 0 6px rgba(0,255,255,.4));
           transition: opacity .25s ease;
         }
-        .flow.active { opacity: .9; }
+        .flow.active { opacity:.9; }
         .flow.hot { stroke: var(--apa-hot-color, #ff4d3a); }
         .flow.cold { stroke: var(--apa-cold-color, #49b5ff); }
         .flow.neutral { stroke: var(--apa-neutral-color, #00e5ff); }
-
         .flow.active.animated {
           stroke-dasharray: 30 26;
           animation: dash 1.1s linear infinite;
@@ -209,7 +227,7 @@ class ApaMenajeraCard extends HTMLElement {
         @keyframes dash { to { stroke-dashoffset: -56; } }
 
         /* Marker styling */
-        .marker { pointer-events: auto; cursor: pointer; }
+        .marker { pointer-events:auto; cursor:pointer; }
         .m-bg {
           fill: rgba(0,0,0,.40);
           stroke: rgba(255,255,255,.15);
@@ -221,25 +239,14 @@ class ApaMenajeraCard extends HTMLElement {
           fill: rgba(255, 60, 45, .40);
           stroke: rgba(255, 160, 150, .35);
         }
-        .marker.hot .m-bg { fill: rgba(255, 77, 58, .22); }
-        .marker.cold .m-bg { fill: rgba(73, 181, 255, .22); }
-
-        .m-value {
-          font-size: 22px;
-          fill: rgba(255,255,255,.95);
-          font-weight: 750;
-        }
-        .m-sub {
-          font-size: 18px;
-          fill: rgba(255,255,255,.65);
-          font-weight: 500;
-        }
+        .m-sub { font-size:18px; fill: rgba(255,255,255,.65); font-weight:500; }
+        .m-value { font-size:22px; fill: rgba(255,255,255,.95); font-weight:750; }
 
         /* Debug */
-        .dbg { pointer-events: auto; }
+        .dbg { pointer-events:auto; }
         .dbg-dot { fill: rgba(255,255,255,.9); stroke: rgba(0,0,0,.6); stroke-width: 2; }
         .dbg-tip { fill: rgba(0,0,0,.55); stroke: rgba(255,255,255,.2); stroke-width: 1; rx: 10; ry: 10; }
-        .dbg-text { font-size: 20px; fill: rgba(255,255,255,.95); font-weight: 700; }
+        .dbg-text { font-size:20px; fill: rgba(255,255,255,.95); font-weight:700; }
       </style>
 
       <ha-card class="card">
@@ -249,6 +256,7 @@ class ApaMenajeraCard extends HTMLElement {
             <div class="badge">v${CARD_VERSION}</div>
           </div>
           <img class="bg" id="bg" alt="background" />
+          <div id="ovls"></div>
           <svg class="overlay" id="svg" viewBox="0 0 ${vb.w} ${vb.h}" preserveAspectRatio="xMidYMid meet"></svg>
         </div>
       </ha-card>
@@ -256,41 +264,71 @@ class ApaMenajeraCard extends HTMLElement {
 
     this._els.wrap = this.shadowRoot.getElementById("wrap");
     this._els.bg = this.shadowRoot.getElementById("bg");
+    this._els.ovls = this.shadowRoot.getElementById("ovls");
     this._els.svg = this.shadowRoot.getElementById("svg");
 
-
-    // Apply sizing constraints (responsive)
+    // constrain width on desktop
     const haCard = this.shadowRoot.querySelector("ha-card");
     if (haCard) {
       haCard.style.width = "100%";
       if (c.maxWidth) haCard.style.maxWidth = (typeof c.maxWidth === "number") ? `${c.maxWidth}px` : String(c.maxWidth);
       haCard.style.margin = "0 auto";
     }
-    if (c.maxHeight) {
-      const wrap = this.shadowRoot.getElementById("wrap");
-      if (wrap) {
-        wrap.style.maxHeight = (typeof c.maxHeight === "number") ? `${c.maxHeight}px` : String(c.maxHeight);
-      }
+    if (c.maxHeight && this._els.wrap) {
+      this._els.wrap.style.maxHeight = (typeof c.maxHeight === "number") ? `${c.maxHeight}px` : String(c.maxHeight);
     }
 
-
+    // apply image fit/position
+    this._els.bg.style.objectFit = c.imageFit || "contain";
+    this._els.bg.style.objectPosition = c.imagePosition || "center";
     this._els.bg.src = c.backgroundDefault;
-    this._els.bg.style.objectFit = c.imageFit || 'cover';
-    this._els.bg.style.objectPosition = c.imagePosition || 'center';
     this._last.bgSrc = c.backgroundDefault;
 
+    this._renderOverlays();
     this._buildSvgStatic();
     this._wireDebug();
   }
 
-  _escape(s) {
-    return String(s).replace(/[&<>"']/g, (m) => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;" }[m]));
+  _renderOverlays() {
+    const c = this._config;
+    const ovls = this._els.ovls;
+    if (!c || !ovls) return;
+
+    ovls.innerHTML = "";
+    (c.overlays || []).forEach((o, idx) => {
+      if (!o || !o.entity || !o.image) return;
+      const img = document.createElement("img");
+      img.className = "ovl";
+      img.id = `ovl-${idx}`;
+      img.src = o.image;
+
+      // per-overlay fit/position/opacity
+      img.style.objectFit = (o.fit ?? c.imageFit ?? "contain");
+      img.style.objectPosition = (o.position ?? c.imagePosition ?? "center");
+      if (o.opacity != null) img.style.opacity = String(o.opacity);
+
+      ovls.appendChild(img);
+    });
+  }
+
+  _updateOverlays() {
+    const c = this._config;
+    const hass = this._hass;
+    const ovls = this._els.ovls;
+    if (!c || !hass || !ovls) return;
+
+    (c.overlays || []).forEach((o, idx) => {
+      const img = ovls.querySelector(`#ovl-${idx}`);
+      if (!img) return;
+      const st = getEntity(hass, o.entity);
+      const active = isActiveState(st, o.state ?? "on");
+      img.style.display = active ? "block" : "none";
+    });
   }
 
   _buildSvgStatic() {
     const svg = this._els.svg;
     if (!svg) return;
-
     while (svg.firstChild) svg.removeChild(svg.firstChild);
 
     const gFlows = document.createElementNS("http://www.w3.org/2000/svg", "g");
@@ -305,28 +343,25 @@ class ApaMenajeraCard extends HTMLElement {
     gDbg.setAttribute("id", "debug");
     svg.appendChild(gDbg);
 
-    // Build flows
+    // flows
     (this._config.flows || []).forEach((f) => {
       if (!f || !f.path || !f.id || !f.entity) return;
       const p = document.createElementNS("http://www.w3.org/2000/svg", "path");
       p.setAttribute("d", f.path);
-      p.setAttribute("class", `flow ${f.class || "hot"} ${f.animated !== false ? "animated" : ""}`);
+      p.setAttribute("class", `flow ${f.class || "hot"} ${(f.animated !== false) ? "animated" : ""}`);
       p.dataset.flowId = f.id;
       gFlows.appendChild(p);
     });
 
-    // Build markers
-    const markers = (this._config.markers && this._config.markers.length)
-      ? this._config.markers
-      : this._defaultMarkers();
-
+    // markers
+    const markers = (this._config.markers && this._config.markers.length) ? this._config.markers : [];
     this._markersUsed = markers;
 
     markers.forEach((m, idx) => {
       if (!m || !m.entity || typeof m.x !== "number" || typeof m.y !== "number") return;
 
       const g = document.createElementNS("http://www.w3.org/2000/svg", "g");
-      g.setAttribute("class", `marker ${m.tone || ""}`.trim());
+      g.setAttribute("class", "marker");
       g.dataset.entity = m.entity;
       g.dataset.markerIdx = String(idx);
 
@@ -362,17 +397,6 @@ class ApaMenajeraCard extends HTMLElement {
         fireEvent(this, "hass-more-info", { entityId: m.entity });
       });
     });
-  }
-
-  _defaultMarkers() {
-    return [
-      { entity: this._config.entities?.collector_temp || "sensor.t1", label: "Colector T1", x: 260, y: 210, tone: "hot" },
-      { entity: this._config.entities?.boiler_top || "sensor.t3", label: "Boiler sus T3", x: 820, y: 250, tone: "hot" },
-      { entity: this._config.entities?.boiler_mid || "sensor.t21", label: "Boiler mijloc T21", x: 820, y: 405, tone: "hot" },
-      { entity: this._config.entities?.inlet_temp || "sensor.tapa", label: "Temp. apă Tapa", x: 760, y: 1180, w: 320, tone: "cold" },
-      { entity: this._config.entities?.pressure || "sensor.papa", label: "Presiune Papa", x: 1100, y: 1180, w: 320 },
-      { entity: this._config.entities?.flow || "sensor.debit", label: "Debit", x: 1440, y: 1180, w: 280 },
-    ];
   }
 
   _wireDebug() {
@@ -445,10 +469,7 @@ class ApaMenajeraCard extends HTMLElement {
       const st = getEntity(hass, rule.entity);
       if (!st) continue;
       const wanted = rule.state ?? "on";
-      if (isActiveState(st, wanted)) {
-        next = rule.image;
-        break;
-      }
+      if (isActiveState(st, wanted)) { next = rule.image; break; }
     }
 
     if (this._last.bgSrc !== next) {
@@ -460,18 +481,13 @@ class ApaMenajeraCard extends HTMLElement {
   _markerIsAlert(markerCfg, stateObj) {
     if (!markerCfg) return false;
 
-    // 1) alert_entity/alert_state (explicit)
     if (markerCfg.alert_entity) {
       const st = getEntity(this._hass, markerCfg.alert_entity);
       if (st && isActiveState(st, markerCfg.alert_state ?? "on")) return true;
     }
-
-    // 2) alert_state on same entity
     if (markerCfg.alert_state != null && stateObj) {
       if (isActiveState(stateObj, markerCfg.alert_state)) return true;
     }
-
-    // 3) thresholds on numeric state
     const n = numState(stateObj);
     if (n != null) {
       if (markerCfg.alert_below != null && n < Number(markerCfg.alert_below)) return true;
@@ -486,8 +502,9 @@ class ApaMenajeraCard extends HTMLElement {
     if (!hass || !c || !this._els.svg) return;
 
     this._applyBackgroundRules();
+    this._updateOverlays();
 
-    // Update marker values + alert class
+    // marker values + alert
     const markerNodes = this._els.svg.querySelectorAll("g.marker");
     markerNodes.forEach((g) => {
       const entityId = g.dataset.entity;
@@ -510,46 +527,31 @@ class ApaMenajeraCard extends HTMLElement {
       g.classList.toggle("alert", alert);
     });
 
-    // Update flows active/inactive
+    // flows
     (c.flows || []).forEach((f) => {
       const p = this._els.svg.querySelector(`path.flow[data-flow-id="${CSS.escape(f.id)}"]`);
       if (!p) return;
-
       const st = getEntity(hass, f.entity);
       const active = isActiveState(st, f.active_state);
-
       const was = this._last.activeFlows.get(f.id);
       if (was !== active) {
         p.classList.toggle("active", active);
-        if (f.class) {
-          p.classList.remove("hot", "cold", "neutral");
-          p.classList.add(f.class);
-        }
+        p.classList.remove("hot","cold","neutral");
+        p.classList.add(f.class || "hot");
         p.classList.toggle("animated", f.animated !== false);
         this._last.activeFlows.set(f.id, active);
       }
     });
-
-    // Optional visual hint based on pump
-    if (c.entities?.pump) {
-      const pumpState = getEntity(hass, c.entities.pump);
-      const active = isActiveState(pumpState, "on");
-      const badge = this.shadowRoot.querySelector(".badge");
-      if (badge) {
-        badge.style.border = active ? "1px solid rgba(255,77,58,.7)" : "1px solid rgba(255,255,255,.12)";
-      }
-    }
   }
 }
 
 customElements.define(CARD_TAG, ApaMenajeraCard);
 
-// Card picker entry
 window.customCards = window.customCards || [];
 window.customCards.push({
   type: CARD_TAG,
   name: "Card Apă Menajeră",
-  description: "Imagine + marker-e + trasee animate (flux) pentru sistem de apă menajeră (solar/electric).",
+  description: "Imagine + overlay-uri (PNG) + marker-e + trasee animate (solar/electric).",
   preview: true
 });
 
