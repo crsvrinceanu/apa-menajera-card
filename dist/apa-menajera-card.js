@@ -5,7 +5,7 @@
  * - SVG markers + animated flows
  * - debug mode: click -> show x,y in background coordinates
  */
-const CARD_VERSION = "1.2.0";
+const CARD_VERSION = "1.2.1";
 const CARD_TAG = "apa-menajera-card";
 const DEFAULT_VIEWBOX = { w: 2048, h: 1365 };
 
@@ -502,6 +502,7 @@ class ApaMenajeraCard extends HTMLElement {
       g.setAttribute("class", "marker");
       g.dataset.entity = m.entity;
       g.dataset.markerIdx = String(idx);
+      if (this._refs) { this._refs.markerGroups[idx] = g; this._refs.markerEntityIds[idx] = m.entity; }
 
       const w = m.w ?? 300;
       const h = m.h ?? 88;
