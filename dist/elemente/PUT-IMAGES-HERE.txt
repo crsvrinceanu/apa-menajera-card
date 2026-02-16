@@ -1,0 +1,3 @@
+Pune aici imaginile overlay (PNG transparent) ex: boiler_on.png
+Ele vor fi accesibile in HA ca:
+/hacsfiles/apa-menajera-card/elemente/boiler_on.png
