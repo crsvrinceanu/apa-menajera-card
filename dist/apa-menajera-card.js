@@ -128,6 +128,46 @@ class ApaMenajeraCard extends HTMLElement {
     if (this._hass) this._update();
     this._kickUpdate();
     this._startWarmup();
+
+    // Refresh when card becomes visible (view/tab/popup navigation can reuse DOM
+    // without an immediate hass setter call).
+    if (!this._visObserver && typeof IntersectionObserver !== "undefined") {
+      this._visObserver = new IntersectionObserver((entries) => {
+        const visible = entries.some((e) => e && e.isIntersecting);
+        if (!visible) return;
+        try {
+          if (this._config) this._update();
+          this._kickUpdate();
+          this._startWarmup();
+        } catch (e) {}
+      }, { threshold: 0.01 });
+    }
+    try { this._visObserver?.observe(this); } catch (e) {}
+
+    // Some dashboard containers attach the card before hass propagation.
+    // Retry a few times right after mount so initial values render immediately.
+    if (this._mountRetryTimer) clearInterval(this._mountRetryTimer);
+    let tries = 0;
+    this._mountRetryTimer = setInterval(() => {
+      tries += 1;
+      try { if (this._config && this._els.svg) this._update(); } catch (e) {}
+      if (tries >= 10) {
+        clearInterval(this._mountRetryTimer);
+        this._mountRetryTimer = null;
+      }
+    }, 250);
+  }
+
+  disconnectedCallback() {
+    if (this._mountRetryTimer) {
+      clearInterval(this._mountRetryTimer);
+      this._mountRetryTimer = null;
+    }
+    if (this._visObserver) {
+      try { this._visObserver.unobserve(this); } catch (e) {}
+      try { this._visObserver.disconnect(); } catch (e) {}
+      this._visObserver = null;
+    }
   }
 
 
@@ -202,7 +242,7 @@ class ApaMenajeraCard extends HTMLElement {
       try { this._update(); } catch (e) { console.warn(`[${CARD_TAG}] update error`, e); }
 
       const elapsed = Date.now() - this._warmup.startedAt;
-      if ((this._entitiesReady() && this._valuesPopulated()) || elapsed > 12000) { // 12s max
+      if ((this._entitiesReady() && this._valuesPopulated()) || elapsed > 30000) { // 30s max
         this._stopWarmup();
       }
     };
@@ -668,11 +708,8 @@ class ApaMenajeraCard extends HTMLElement {
       const tVal = (this._refs && this._refs.markerValueEls) ? this._refs.markerValueEls[idx] : null;
       if (!tVal && c.debug) console.warn(`[${CARD_TAG}] Missing marker value element for idx=${idx}, entity=${entityId}`);
       if (tVal) {
-        const key = entityId;
-        if (this._last.markerText.get(key) !== valueText) {
-          tVal.textContent = valueText;
-          this._last.markerText.set(key, valueText);
-        }
+        tVal.textContent = valueText;
+        this._last.markerText.set(entityId, valueText);
       }
 
       const alert = this._markerIsAlert(cfg, st);
@@ -684,14 +721,11 @@ class ApaMenajeraCard extends HTMLElement {
       if (!p) return;
       const st = getEntity(hass, f.entity);
       const active = isActiveState(st, f.active_state);
-      const was = this._last.activeFlows.get(f.id);
-      if (was !== active) {
-        p.classList.toggle("active", active);
-        p.classList.remove("hot","cold","neutral");
-        p.classList.add(f.class || "hot");
-        p.classList.toggle("animated", f.animated !== false);
-        this._last.activeFlows.set(f.id, active);
-      }
+      p.classList.toggle("active", active);
+      p.classList.remove("hot","cold","neutral");
+      p.classList.add(f.class || "hot");
+      p.classList.toggle("animated", f.animated !== false);
+      this._last.activeFlows.set(f.id, active);
     });
   }
 }
