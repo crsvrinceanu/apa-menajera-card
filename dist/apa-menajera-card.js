@@ -5,7 +5,7 @@
  * - SVG markers + animated flows
  * - debug mode: click -> show x,y in background coordinates
  */
-const CARD_VERSION = "1.1.9";
+const CARD_VERSION = "1.2.0";
 const CARD_TAG = "apa-menajera-card";
 const DEFAULT_VIEWBOX = { w: 2048, h: 1365 };
 
@@ -59,7 +59,7 @@ class ApaMenajeraCard extends HTMLElement {
     this._markersUsed = [];
     this._last = { markerText: new Map(), activeFlows: new Map(), bgSrc: null };
     this._warmup = { timer: null, startedAt: 0 };
-    this._refs = { markerValueEls: [], flowEls: new Map() };
+    this._refs = { markerValueEls: [], markerGroups: [], markerEntityIds: [], flowEls: new Map() };
   }
 
   static getStubConfig() {
@@ -180,6 +180,18 @@ class ApaMenajeraCard extends HTMLElement {
     return ids.every((id) => !!hass.states[id]);
   }
 
+
+  _valuesPopulated() {
+    // Returns true if at least one marker has a real value (not placeholder).
+    const els = this._refs?.markerValueEls || [];
+    for (const el of els) {
+      if (!el) continue;
+      const t = (el.textContent || "").trim();
+      if (t && t !== "—" && t !== "-" && t !== "–") return true;
+    }
+    return false;
+  }
+
   _startWarmup() {
     // Poll for a short time after load to avoid HA race conditions (states arrive slightly later).
     if (!this._config || !this._hass) return;
@@ -190,7 +202,7 @@ class ApaMenajeraCard extends HTMLElement {
       try { this._update(); } catch (e) { console.warn(`[${CARD_TAG}] update error`, e); }
 
       const elapsed = Date.now() - this._warmup.startedAt;
-      if (this._entitiesReady() || elapsed > 12000) { // 12s max
+      if ((this._entitiesReady() && this._valuesPopulated()) || elapsed > 12000) { // 12s max
         this._stopWarmup();
       }
     };
@@ -452,6 +464,8 @@ class ApaMenajeraCard extends HTMLElement {
     // clear element refs
     if (this._refs) {
       this._refs.markerValueEls = [];
+      this._refs.markerGroups = [];
+      this._refs.markerEntityIds = [];
       this._refs.flowEls = new Map();
     }
 
@@ -634,10 +648,11 @@ class ApaMenajeraCard extends HTMLElement {
       if (missing.length) console.warn(`[${CARD_TAG}] Missing entities:`, missing);
     }
 
-    const markerNodes = this._els.svg.querySelectorAll("g.marker");
-    markerNodes.forEach((g) => {
-      const entityId = g.dataset.entity;
-      const idx = Number(g.dataset.markerIdx);
+    const mgs = (this._refs && this._refs.markerGroups) ? this._refs.markerGroups : [];
+    mgs.forEach((g, idx) => {
+      if (!g) return;
+
+      const entityId = (this._refs && this._refs.markerEntityIds) ? this._refs.markerEntityIds[idx] : (g.dataset.entity || '');
       const cfg = this._markersUsed?.[idx] || null;
 
       const st = getEntity(hass, entityId);
