@@ -5,7 +5,7 @@
  * - SVG markers + animated flows
  * - debug mode: click -> show x,y in background coordinates
  */
-const CARD_VERSION = "1.1.6";
+const CARD_VERSION = "1.1.7";
 const CARD_TAG = "apa-menajera-card";
 const DEFAULT_VIEWBOX = { w: 2048, h: 1365 };
 
@@ -107,6 +107,7 @@ class ApaMenajeraCard extends HTMLElement {
     };
 
     this._renderBase();
+    this._kickUpdate();
   }
 
   getCardSize() { return 5; }
@@ -115,11 +116,32 @@ class ApaMenajeraCard extends HTMLElement {
     this._hass = hass;
     if (!this._config) return;
     this._update();
+    this._kickUpdate();
   }
 
   connectedCallback() {
     if (this._config) this._renderBase();
     if (this._hass) this._update();
+    this._kickUpdate();
+  }
+
+
+  _kickUpdate() {
+    // HA can race: hass/config/render order differs between reloads.
+    // We run a few delayed updates so markers/flows always populate.
+    if (this._kickTimer) clearTimeout(this._kickTimer);
+    if (this._kickTimer2) clearTimeout(this._kickTimer2);
+    if (this._kickRaf) cancelAnimationFrame(this._kickRaf);
+
+    const run = () => {
+      try { if (this._hass && this._config) this._update(); } catch (e) {}
+    };
+
+    // next frame
+    this._kickRaf = requestAnimationFrame(run);
+    // and shortly after (entities may arrive a bit later)
+    this._kickTimer = setTimeout(run, 150);
+    this._kickTimer2 = setTimeout(run, 800);
   }
 
   _escape(s) {
@@ -298,6 +320,7 @@ class ApaMenajeraCard extends HTMLElement {
     // Important: on page refresh HA may set hass BEFORE config.
     // Trigger a first update so markers/flows reflect current states immediately.
     if (this._hass) this._update();
+    this._kickUpdate();
   }
 
   _renderOverlays() {
@@ -538,6 +561,7 @@ class ApaMenajeraCard extends HTMLElement {
       const cfg = this._markersUsed?.[idx] || null;
 
       const st = getEntity(hass, entityId);
+      if (!st && c.debug) console.warn(`[${CARD_TAG}] Missing entity in hass.states: ${entityId}`);
       const valueText = fmtState(st);
 
       const tVal = g.querySelector("text[data-value='1']");
