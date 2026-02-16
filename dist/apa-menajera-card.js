@@ -5,7 +5,7 @@
  * - SVG markers + animated flows
  * - debug mode: click -> show x,y in background coordinates
  */
-const CARD_VERSION = "1.1.7";
+const CARD_VERSION = "1.1.8";
 const CARD_TAG = "apa-menajera-card";
 const DEFAULT_VIEWBOX = { w: 2048, h: 1365 };
 
@@ -58,6 +58,7 @@ class ApaMenajeraCard extends HTMLElement {
     this._els = {};
     this._markersUsed = [];
     this._last = { markerText: new Map(), activeFlows: new Map(), bgSrc: null };
+    this._warmup = { timer: null, startedAt: 0 };
   }
 
   static getStubConfig() {
@@ -108,6 +109,7 @@ class ApaMenajeraCard extends HTMLElement {
 
     this._renderBase();
     this._kickUpdate();
+    this._startWarmup();
   }
 
   getCardSize() { return 5; }
@@ -117,12 +119,14 @@ class ApaMenajeraCard extends HTMLElement {
     if (!this._config) return;
     this._update();
     this._kickUpdate();
+    this._startWarmup();
   }
 
   connectedCallback() {
     if (this._config) this._renderBase();
     if (this._hass) this._update();
     this._kickUpdate();
+    this._startWarmup();
   }
 
 
@@ -142,6 +146,64 @@ class ApaMenajeraCard extends HTMLElement {
     // and shortly after (entities may arrive a bit later)
     this._kickTimer = setTimeout(run, 150);
     this._kickTimer2 = setTimeout(run, 800);
+  }
+
+
+  _collectEntityIds() {
+    const c = this._config;
+    if (!c) return [];
+    const ids = new Set();
+
+    const add = (v) => { if (v && typeof v === "string") ids.add(v); };
+
+    (c.markers || []).forEach((m) => {
+      add(m.entity);
+      add(m.alert_entity);
+    });
+
+    (c.flows || []).forEach((f) => add(f.entity));
+    (c.backgroundWhen || []).forEach((r) => add(r.entity));
+    (c.overlays || []).forEach((o) => add(o.entity));
+
+    // remove empties
+    return [...ids].filter(Boolean);
+  }
+
+  _entitiesReady() {
+    const hass = this._hass;
+    if (!hass) return false;
+    const ids = this._collectEntityIds();
+    if (!ids.length) return true;
+
+    // ready if all exist in hass.states (even if state is unknown)
+    return ids.every((id) => !!hass.states[id]);
+  }
+
+  _startWarmup() {
+    // Poll for a short time after load to avoid HA race conditions (states arrive slightly later).
+    if (!this._config || !this._hass) return;
+    if (this._warmup.timer) return;
+
+    this._warmup.startedAt = Date.now();
+    const tick = () => {
+      try { this._update(); } catch (e) { console.warn(`[${CARD_TAG}] update error`, e); }
+
+      const elapsed = Date.now() - this._warmup.startedAt;
+      if (this._entitiesReady() || elapsed > 12000) { // 12s max
+        this._stopWarmup();
+      }
+    };
+
+    this._warmup.timer = setInterval(tick, 400);
+    // do one immediately
+    tick();
+  }
+
+  _stopWarmup() {
+    if (this._warmup?.timer) {
+      clearInterval(this._warmup.timer);
+      this._warmup.timer = null;
+    }
   }
 
   _escape(s) {
@@ -321,6 +383,7 @@ class ApaMenajeraCard extends HTMLElement {
     // Trigger a first update so markers/flows reflect current states immediately.
     if (this._hass) this._update();
     this._kickUpdate();
+    this._startWarmup();
   }
 
   _renderOverlays() {
@@ -553,6 +616,12 @@ class ApaMenajeraCard extends HTMLElement {
 
     this._applyBackgroundRules();
     this._updateOverlays();
+
+    if (c.debug) {
+      const ids = this._collectEntityIds();
+      const missing = ids.filter((id) => !hass.states[id]);
+      if (missing.length) console.warn(`[${CARD_TAG}] Missing entities:`, missing);
+    }
 
     const markerNodes = this._els.svg.querySelectorAll("g.marker");
     markerNodes.forEach((g) => {
