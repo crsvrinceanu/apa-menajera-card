@@ -5,7 +5,7 @@
  * - SVG markers + animated flows
  * - debug mode: click -> show x,y in background coordinates
  */
-const CARD_VERSION = "1.1.4";
+const CARD_VERSION = "1.1.5";
 const CARD_TAG = "apa-menajera-card";
 const DEFAULT_VIEWBOX = { w: 2048, h: 1365 };
 
@@ -211,13 +211,21 @@ class ApaMenajeraCard extends HTMLElement {
           stroke-linejoin:round;
           stroke-width:10;
           opacity:0;
-          filter: drop-shadow(0 0 6px rgba(0,255,255,.4));
           transition: opacity .25s ease;
         }
         .flow.active { opacity:.9; }
-        .flow.hot { stroke: var(--apa-hot-color, #ff4d3a); }
-        .flow.cold { stroke: var(--apa-cold-color, #49b5ff); }
-        .flow.neutral { stroke: var(--apa-neutral-color, #00e5ff); }
+        .flow.hot {
+          stroke: var(--apa-hot-color, #ff1744);
+          filter: drop-shadow(0 0 var(--apa-glow-size, 14px) var(--apa-hot-glow, rgba(255, 23, 68, .9)));
+        }
+        .flow.cold {
+          stroke: var(--apa-cold-color, #00e5ff);
+          filter: drop-shadow(0 0 var(--apa-glow-size, 14px) var(--apa-cold-glow, rgba(0, 229, 255, .9)));
+        }
+        .flow.neutral {
+          stroke: var(--apa-neutral-color, #00e5ff);
+          filter: drop-shadow(0 0 var(--apa-glow-size, 14px) var(--apa-neutral-glow, rgba(0, 229, 255, .75)));
+        }
         .flow.active.animated {
           stroke-dasharray: 30 26;
           animation: dash 1.1s linear infinite;
