@@ -5,7 +5,7 @@
  * - SVG markers + animated flows
  * - debug mode: click -> show x,y in background coordinates
  */
-const CARD_VERSION = "1.1.8";
+const CARD_VERSION = "1.1.9";
 const CARD_TAG = "apa-menajera-card";
 const DEFAULT_VIEWBOX = { w: 2048, h: 1365 };
 
@@ -59,6 +59,7 @@ class ApaMenajeraCard extends HTMLElement {
     this._markersUsed = [];
     this._last = { markerText: new Map(), activeFlows: new Map(), bgSrc: null };
     this._warmup = { timer: null, startedAt: 0 };
+    this._refs = { markerValueEls: [], flowEls: new Map() };
   }
 
   static getStubConfig() {
@@ -448,6 +449,12 @@ class ApaMenajeraCard extends HTMLElement {
     if (!svg) return;
     while (svg.firstChild) svg.removeChild(svg.firstChild);
 
+    // clear element refs
+    if (this._refs) {
+      this._refs.markerValueEls = [];
+      this._refs.flowEls = new Map();
+    }
+
     const gFlows = document.createElementNS("http://www.w3.org/2000/svg", "g");
     gFlows.setAttribute("id", "flows");
     svg.appendChild(gFlows);
@@ -466,6 +473,8 @@ class ApaMenajeraCard extends HTMLElement {
       p.setAttribute("d", f.path);
       p.setAttribute("class", `flow ${f.class || "hot"} ${(f.animated !== false) ? "animated" : ""}`);
       p.dataset.flowId = f.id;
+      p.id = `flow-${f.id}`;
+      this._refs.flowEls.set(f.id, p);
       gFlows.appendChild(p);
     });
 
@@ -504,6 +513,8 @@ class ApaMenajeraCard extends HTMLElement {
       tVal.setAttribute("y", String(m.y + 64));
       tVal.textContent = "—";
       tVal.dataset.value = "1";
+      tVal.id = `mval-${idx}`;
+      this._refs.markerValueEls[idx] = tVal;
       g.appendChild(tVal);
 
       gMarkers.appendChild(g);
@@ -633,7 +644,8 @@ class ApaMenajeraCard extends HTMLElement {
       if (!st && c.debug) console.warn(`[${CARD_TAG}] Missing entity in hass.states: ${entityId}`);
       const valueText = fmtState(st);
 
-      const tVal = g.querySelector("text[data-value='1']");
+      const tVal = (this._refs && this._refs.markerValueEls) ? this._refs.markerValueEls[idx] : null;
+      if (!tVal && c.debug) console.warn(`[${CARD_TAG}] Missing marker value element for idx=${idx}, entity=${entityId}`);
       if (tVal) {
         const key = entityId;
         if (this._last.markerText.get(key) !== valueText) {
@@ -647,7 +659,7 @@ class ApaMenajeraCard extends HTMLElement {
     });
 
     (c.flows || []).forEach((f) => {
-      const p = this._els.svg.querySelector(`path.flow[data-flow-id="${CSS.escape(f.id)}"]`);
+      const p = (this._refs && this._refs.flowEls) ? this._refs.flowEls.get(f.id) : null;
       if (!p) return;
       const st = getEntity(hass, f.entity);
       const active = isActiveState(st, f.active_state);
