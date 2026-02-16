@@ -1,11 +1,11 @@
 /* apa-menajera-card.js (HACS dashboard plugin)
- * v1.1.3
- * - background image (responsive)
- * - optional overlay images toggled by entity state (PNG transparent)
+ * v1.1.4
+ * - background image (responsive, max_width)
+ * - overlays (PNG transparent) toggled by entity state, optionally positioned with x/y/w/h in viewbox coords
  * - SVG markers + animated flows
  * - debug mode: click -> show x,y in background coordinates
  */
-const CARD_VERSION = "1.1.3";
+const CARD_VERSION = "1.1.4";
 const CARD_TAG = "apa-menajera-card";
 const DEFAULT_VIEWBOX = { w: 2048, h: 1365 };
 
@@ -65,7 +65,7 @@ class ApaMenajeraCard extends HTMLElement {
       type: "custom:apa-menajera-card",
       title: "Apă menajeră",
       background: "/hacsfiles/apa-menajera-card/card.png",
-      overlays: [],
+      overlays: [],  // [{entity,state,image,x,y,w,h,opacity,fit,position}]
       markers: [],
       flows: [],
       debug: false,
@@ -92,8 +92,6 @@ class ApaMenajeraCard extends HTMLElement {
       backgroundDefault: bgDefault,
       backgroundWhen: bgWhen,
 
-      // NEW: overlays (images stacked above background)
-      // format: [{ entity, state: "on", image, opacity, fit, position }]
       overlays: Array.isArray(config.overlays) ? config.overlays : [],
 
       entities: config.entities ?? {},
@@ -102,7 +100,6 @@ class ApaMenajeraCard extends HTMLElement {
       debug: !!config.debug,
       viewbox: config.viewbox ?? DEFAULT_VIEWBOX,
 
-      // responsive sizing
       imageFit: config.image_fit ?? "contain",            // contain | cover
       imagePosition: config.image_position ?? "center",
       maxWidth: config.max_width ?? "1100px",             // e.g. "900px"
@@ -148,7 +145,7 @@ class ApaMenajeraCard extends HTMLElement {
           top: 10px; left: 12px; right: 12px;
           display:flex; align-items:center; justify-content:space-between;
           pointer-events:none;
-          z-index: 5;
+          z-index: 6;
         }
         .title {
           padding: 6px 10px;
@@ -188,9 +185,10 @@ class ApaMenajeraCard extends HTMLElement {
         #ovls { position:absolute; inset:0; z-index:2; pointer-events:none; }
         img.ovl {
           position:absolute;
-          inset:0;
-          width:100%;
-          height:100%;
+          left: 0;
+          top: 0;
+          width: 100%;
+          height: 100%;
           object-fit: contain;
           object-position: center;
           opacity: 1;
@@ -297,15 +295,35 @@ class ApaMenajeraCard extends HTMLElement {
     ovls.innerHTML = "";
     (c.overlays || []).forEach((o, idx) => {
       if (!o || !o.entity || !o.image) return;
+
       const img = document.createElement("img");
       img.className = "ovl";
       img.id = `ovl-${idx}`;
       img.src = o.image;
 
-      // per-overlay fit/position/opacity
+      // fit/position/opacity
       img.style.objectFit = (o.fit ?? c.imageFit ?? "contain");
       img.style.objectPosition = (o.position ?? c.imagePosition ?? "center");
       if (o.opacity != null) img.style.opacity = String(o.opacity);
+
+      // IMPORTANT: if your PNG is only a cutout (pump only), set x/y/w/h to place it.
+      // x/y/w/h are in the SAME coordinates shown by debug mode (viewbox units).
+      const vb = c.viewbox ?? DEFAULT_VIEWBOX;
+      if (o.x != null && o.y != null && o.w != null && o.h != null) {
+        const leftPct = (Number(o.x) / vb.w) * 100;
+        const topPct  = (Number(o.y) / vb.h) * 100;
+        const wPct    = (Number(o.w) / vb.w) * 100;
+        const hPct    = (Number(o.h) / vb.h) * 100;
+        img.style.left = `${leftPct}%`;
+        img.style.top = `${topPct}%`;
+        img.style.width = `${wPct}%`;
+        img.style.height = `${hPct}%`;
+      } else {
+        img.style.left = "0%";
+        img.style.top = "0%";
+        img.style.width = "100%";
+        img.style.height = "100%";
+      }
 
       ovls.appendChild(img);
     });
@@ -343,7 +361,6 @@ class ApaMenajeraCard extends HTMLElement {
     gDbg.setAttribute("id", "debug");
     svg.appendChild(gDbg);
 
-    // flows
     (this._config.flows || []).forEach((f) => {
       if (!f || !f.path || !f.id || !f.entity) return;
       const p = document.createElementNS("http://www.w3.org/2000/svg", "path");
@@ -353,7 +370,6 @@ class ApaMenajeraCard extends HTMLElement {
       gFlows.appendChild(p);
     });
 
-    // markers
     const markers = (this._config.markers && this._config.markers.length) ? this._config.markers : [];
     this._markersUsed = markers;
 
@@ -463,13 +479,11 @@ class ApaMenajeraCard extends HTMLElement {
     if (!c || !hass || !this._els.bg) return;
 
     let next = c.backgroundDefault;
-
     for (const rule of (c.backgroundWhen || [])) {
       if (!rule || !rule.entity || !rule.image) continue;
       const st = getEntity(hass, rule.entity);
       if (!st) continue;
-      const wanted = rule.state ?? "on";
-      if (isActiveState(st, wanted)) { next = rule.image; break; }
+      if (isActiveState(st, rule.state ?? "on")) { next = rule.image; break; }
     }
 
     if (this._last.bgSrc !== next) {
@@ -504,7 +518,6 @@ class ApaMenajeraCard extends HTMLElement {
     this._applyBackgroundRules();
     this._updateOverlays();
 
-    // marker values + alert
     const markerNodes = this._els.svg.querySelectorAll("g.marker");
     markerNodes.forEach((g) => {
       const entityId = g.dataset.entity;
@@ -527,7 +540,6 @@ class ApaMenajeraCard extends HTMLElement {
       g.classList.toggle("alert", alert);
     });
 
-    // flows
     (c.flows || []).forEach((f) => {
       const p = this._els.svg.querySelector(`path.flow[data-flow-id="${CSS.escape(f.id)}"]`);
       if (!p) return;
