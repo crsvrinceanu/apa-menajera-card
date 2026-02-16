@@ -461,6 +461,11 @@ class ApaMenajeraCard extends HTMLElement {
     if (!svg) return;
     while (svg.firstChild) svg.removeChild(svg.firstChild);
 
+    // DOM for markers/flows is recreated, so cached rendered values must be reset
+    // to force first update to paint current HA states on the new elements.
+    this._last.markerText = new Map();
+    this._last.activeFlows = new Map();
+
     // clear element refs
     if (this._refs) {
       this._refs.markerValueEls = [];
