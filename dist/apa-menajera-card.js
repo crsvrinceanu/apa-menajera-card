@@ -347,25 +347,25 @@ class ApaMenajeraCard extends HTMLElement {
           fill:none;
           stroke-linecap:round;
           stroke-linejoin:round;
-          stroke-width:10;
+          stroke-width:7;
           opacity:0;
           transition: opacity .25s ease;
         }
-        .flow.active { opacity:.9; }
+        .flow.active { opacity:.55; }
         .flow.hot {
           stroke: var(--apa-hot-color, #ff1744);
-          filter: drop-shadow(0 0 var(--apa-glow-size, 10px) var(--apa-hot-glow, rgba(255, 23, 69, 0.4)));
+          filter: drop-shadow(0 0 var(--apa-glow-size, 10px) var(--apa-hot-glow, rgba(255, 23, 69, 0.9)));
         }
         .flow.cold {
           stroke: var(--apa-cold-color, #00e5ff);
-          filter: drop-shadow(0 0 var(--apa-glow-size, 10px) var(--apa-cold-glow, rgba(0, 229, 255, .4)));
+          filter: drop-shadow(0 0 var(--apa-glow-size, 10px) var(--apa-cold-glow, rgba(0, 229, 255, .9)));
         }
         .flow.neutral {
           stroke: var(--apa-neutral-color, #00e5ff);
           filter: drop-shadow(0 0 var(--apa-glow-size, 10px) var(--apa-neutral-glow, rgba(0, 229, 255, .75)));
         }
         .flow.active.animated {
-          stroke-dasharray: 30 26;
+          stroke-dasharray: 16 24;
           animation: dash 1.1s linear infinite;
         }
         @keyframes dash { to { stroke-dashoffset: -56; } }
