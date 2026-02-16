@@ -5,7 +5,7 @@
  * - SVG markers + animated flows
  * - debug mode: click -> show x,y in background coordinates
  */
-const CARD_VERSION = "1.1.5";
+const CARD_VERSION = "1.1.6";
 const CARD_TAG = "apa-menajera-card";
 const DEFAULT_VIEWBOX = { w: 2048, h: 1365 };
 
@@ -119,6 +119,7 @@ class ApaMenajeraCard extends HTMLElement {
 
   connectedCallback() {
     if (this._config) this._renderBase();
+    if (this._hass) this._update();
   }
 
   _escape(s) {
@@ -293,6 +294,10 @@ class ApaMenajeraCard extends HTMLElement {
     this._renderOverlays();
     this._buildSvgStatic();
     this._wireDebug();
+
+    // Important: on page refresh HA may set hass BEFORE config.
+    // Trigger a first update so markers/flows reflect current states immediately.
+    if (this._hass) this._update();
   }
 
   _renderOverlays() {
