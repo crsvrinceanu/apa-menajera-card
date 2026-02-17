@@ -89,6 +89,27 @@ function numState(stateObj) {
   return Number.isFinite(n) ? n : null;
 }
 
+function matchOverlayCondition(stateObj, cfg) {
+  if (!stateObj || !cfg) return false;
+
+  const n = numState(stateObj);
+  const hasNumericRule =
+    cfg.lt != null || cfg.lte != null || cfg.gt != null || cfg.gte != null ||
+    cfg.below != null || cfg.above != null;
+
+  if (hasNumericRule && n != null) {
+    if (cfg.lt != null && !(n < Number(cfg.lt))) return false;
+    if (cfg.lte != null && !(n <= Number(cfg.lte))) return false;
+    if (cfg.gt != null && !(n > Number(cfg.gt))) return false;
+    if (cfg.gte != null && !(n >= Number(cfg.gte))) return false;
+    if (cfg.below != null && !(n < Number(cfg.below))) return false;
+    if (cfg.above != null && !(n > Number(cfg.above))) return false;
+    return true;
+  }
+
+  return isActiveState(stateObj, cfg.state ?? "on");
+}
+
 class ApaMenajeraCard extends HTMLElement {
   constructor() {
     super();
@@ -553,7 +574,7 @@ class ApaMenajeraCard extends HTMLElement {
       const img = ovls.querySelector(`#ovl-${idx}`);
       if (!img) return;
       const st = getEntity(hass, o.entity);
-      const active = isActiveState(st, o.state ?? "on");
+      const active = matchOverlayCondition(st, o);
       img.style.display = active ? "block" : "none";
     });
   }
