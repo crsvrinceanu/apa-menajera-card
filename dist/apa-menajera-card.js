@@ -377,7 +377,7 @@ class ApaMenajeraCard extends HTMLElement {
         /* Marker styling */
         .marker { pointer-events:auto; cursor:pointer; }
         .m-bg {
-          fill: rgba(255, 255, 255, .30);
+          fill: rgba(255, 255, 255, .80);
           stroke: rgba(150, 215, 255, .98);
           stroke-width: 1.2;
           filter: drop-shadow(0 0 8px rgba(95, 185, 255, .82));
@@ -721,11 +721,11 @@ class ApaMenajeraCard extends HTMLElement {
         const labelEl = g.querySelector(".m-sub");
         const bgEl = g.querySelector(".m-bg");
         if (labelEl && bgEl) {
-          const padX = 12;
+          const padX = 8;
           const padTop = 8;
           const gap = 4;
           const padBottom = 9;
-          const minW = 130;
+          const minW = 100;
           const minH = 50;
 
           let labelW = 0, labelH = 0, valueW = 0, valueH = 0;
