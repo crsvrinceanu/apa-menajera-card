@@ -377,10 +377,10 @@ class ApaMenajeraCard extends HTMLElement {
         /* Marker styling */
         .marker { pointer-events:auto; cursor:pointer; }
         .m-bg {
-          fill: rgba(0, 235, 255, .38);
-          stroke: rgba(110, 245, 255, .95);
-          stroke-width: 1.4;
-          filter: drop-shadow(0 0 9px rgba(0, 245, 255, .75));
+          fill: rgba(75, 165, 255, .46);
+          stroke: rgba(150, 215, 255, .98);
+          stroke-width: 1.2;
+          filter: drop-shadow(0 0 8px rgba(95, 185, 255, .82));
           rx: 10; ry: 10;
           transition: fill .2s ease, stroke .2s ease;
         }
@@ -389,8 +389,8 @@ class ApaMenajeraCard extends HTMLElement {
           stroke: rgba(255, 180, 170, .96);
           filter: drop-shadow(0 0 9px rgba(255, 90, 80, .8));
         }
-        .m-sub { font-size:18px; fill: rgba(255,255,255,.65); font-weight:500; }
-        .m-value { font-size:22px; fill: rgba(255,255,255,.95); font-weight:750; }
+        .m-sub { font-size:15px; fill: rgba(255,255,255,.72); font-weight:550; }
+        .m-value { font-size:18px; fill: rgba(255,255,255,.96); font-weight:730; }
 
         /* Debug */
         .dbg { pointer-events:auto; }
@@ -721,12 +721,12 @@ class ApaMenajeraCard extends HTMLElement {
         const labelEl = g.querySelector(".m-sub");
         const bgEl = g.querySelector(".m-bg");
         if (labelEl && bgEl) {
-          const padX = 16;
-          const padTop = 12;
-          const gap = 10;
-          const padBottom = 14;
-          const minW = 170;
-          const minH = 70;
+          const padX = 12;
+          const padTop = 8;
+          const gap = 4;
+          const padBottom = 9;
+          const minW = 130;
+          const minH = 50;
 
           let labelW = 0, labelH = 0, valueW = 0, valueH = 0;
           try {
@@ -749,9 +749,9 @@ class ApaMenajeraCard extends HTMLElement {
           const baseX = Number(bgEl.getAttribute("x") || "0");
           const baseY = Number(bgEl.getAttribute("y") || "0");
           labelEl.setAttribute("x", String(baseX + padX));
-          labelEl.setAttribute("y", String(baseY + padTop + 18));
+          labelEl.setAttribute("y", String(baseY + padTop + 14));
           tVal.setAttribute("x", String(baseX + padX));
-          tVal.setAttribute("y", String(baseY + boxH - padBottom));
+          tVal.setAttribute("y", String(baseY + boxH - padBottom + 1));
         }
       }
 
