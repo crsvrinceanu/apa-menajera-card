@@ -1,4 +1,4 @@
-/* apa-menajera-card.js (HACS dashboard plugin)
+﻿/* apa-menajera-card.js (HACS dashboard plugin)
  * v1.1.4
  * - background image (responsive, max_width)
  * - overlays (PNG transparent) toggled by entity state, optionally positioned with x/y/w/h in viewbox coords
@@ -34,9 +34,9 @@ function isActiveState(stateObj, activeState) {
 }
 
 function fmtState(stateObj) {
-  if (!stateObj) return "—";
+  if (!stateObj) return "â€”";
   const s = stateObj.state;
-  if (s === "unknown" || s === "unavailable") return "—";
+  if (s === "unknown" || s === "unavailable") return "â€”";
   const unit = stateObj.attributes?.unit_of_measurement ? stateObj.attributes.unit_of_measurement : "";
   return unit ? `${s} ${unit}` : `${s}`;
 }
@@ -65,7 +65,7 @@ class ApaMenajeraCard extends HTMLElement {
   static getStubConfig() {
     return {
       type: "custom:apa-menajera-card",
-      title: "Apă menajeră",
+      title: "ApÄƒ menajerÄƒ",
       background: "/hacsfiles/apa-menajera-card/card.png",
       overlays: [],  // [{entity,state,image,x,y,w,h,opacity,fit,position}]
       markers: [],
@@ -74,6 +74,10 @@ class ApaMenajeraCard extends HTMLElement {
       image_fit: "contain",
       max_width: "1100px",
     };
+  }
+
+  static getConfigElement() {
+    return document.createElement("apa-menajera-card-editor");
   }
 
   setConfig(config) {
@@ -227,7 +231,7 @@ class ApaMenajeraCard extends HTMLElement {
     for (const el of els) {
       if (!el) continue;
       const t = (el.textContent || "").trim();
-      if (t && t !== "—" && t !== "-" && t !== "–") return true;
+      if (t && t !== "â€”" && t !== "-" && t !== "â€“") return true;
     }
     return false;
   }
@@ -571,7 +575,7 @@ class ApaMenajeraCard extends HTMLElement {
       tVal.setAttribute("class", "m-value");
       tVal.setAttribute("x", String(m.x + 16));
       tVal.setAttribute("y", String(m.y + 64));
-      tVal.textContent = "—";
+      tVal.textContent = "â€”";
       tVal.dataset.value = "1";
       tVal.id = `mval-${idx}`;
       this._refs.markerValueEls[idx] = tVal;
@@ -730,14 +734,271 @@ class ApaMenajeraCard extends HTMLElement {
   }
 }
 
+class ApaMenajeraCardEditor extends HTMLElement {
+  constructor() {
+    super();
+    this.attachShadow({ mode: "open" });
+    this._config = {};
+  }
+
+  setConfig(config) {
+    this._config = config || {};
+    this._render();
+  }
+
+  connectedCallback() {
+    this._render();
+  }
+
+  _emitConfig(config) {
+    fireEvent(this, "config-changed", { config });
+  }
+
+  _onTitleChange(ev) {
+    const next = { ...(this._config || {}), title: ev.target.value };
+    this._config = next;
+    this._emitConfig(next);
+  }
+
+  _onBackgroundChange(ev) {
+    const raw = ev.target.value.trim();
+    const next = { ...(this._config || {}) };
+    if (!raw) {
+      delete next.background;
+    } else {
+      next.background = raw;
+    }
+    this._config = next;
+    this._emitConfig(next);
+  }
+
+  _updateMarkers(nextMarkers) {
+    const markers = Array.isArray(nextMarkers) ? nextMarkers : [];
+    const next = { ...(this._config || {}), markers };
+    this._config = next;
+    this._emitConfig(next);
+  }
+
+  _onMarkerFieldChange(idx, field, rawValue) {
+    const markers = Array.isArray(this._config?.markers) ? [...this._config.markers] : [];
+    if (!markers[idx]) return;
+    const nextMarker = { ...markers[idx] };
+
+    if (field === "x" || field === "y") {
+      const n = Number(rawValue);
+      if (rawValue === "") {
+        delete nextMarker[field];
+      } else if (Number.isFinite(n)) {
+        nextMarker[field] = n;
+      } else {
+        return;
+      }
+    } else {
+      nextMarker[field] = rawValue;
+    }
+
+    markers[idx] = nextMarker;
+    this._updateMarkers(markers);
+  }
+
+  _addMarker() {
+    const markers = Array.isArray(this._config?.markers) ? [...this._config.markers] : [];
+    markers.push({
+      entity: "",
+      label: "",
+      x: 100,
+      y: 100,
+    });
+    this._updateMarkers(markers);
+  }
+
+  _removeMarker(idx) {
+    const markers = Array.isArray(this._config?.markers) ? [...this._config.markers] : [];
+    if (!markers[idx]) return;
+    markers.splice(idx, 1);
+    this._updateMarkers(markers);
+  }
+
+  _render() {
+    const c = this._config || {};
+    const markers = Array.isArray(c.markers) ? c.markers : [];
+    const bg = (typeof c.background === "string") ? c.background : "";
+
+    const rows = markers.length
+      ? markers.map((m, idx) => `
+          <div class="row">
+            <input
+              data-marker-idx="${idx}"
+              data-field="entity"
+              type="text"
+              value="${this._escape(m?.entity || "")}"
+              placeholder="sensor.exemplu"
+            />
+            <input
+              data-marker-idx="${idx}"
+              data-field="label"
+              type="text"
+              value="${this._escape(m?.label || "")}"
+              placeholder="Nume senzor"
+            />
+            <input
+              data-marker-idx="${idx}"
+              data-field="x"
+              type="number"
+              step="1"
+              value="${(m?.x != null) ? String(m.x) : ""}"
+              placeholder="x"
+            />
+            <input
+              data-marker-idx="${idx}"
+              data-field="y"
+              type="number"
+              step="1"
+              value="${(m?.y != null) ? String(m.y) : ""}"
+              placeholder="y"
+            />
+            <button class="btn danger" data-remove-idx="${idx}" type="button">Sterge</button>
+          </div>
+        `).join("")
+      : `<div class="empty">Nu ai markere configurate. Adauga primul marker din buton.</div>`;
+
+    this.shadowRoot.innerHTML = `
+      <style>
+        :host { display:block; }
+        .wrap { padding: 12px; }
+        .card {
+          border: 1px solid rgba(127,127,127,.35);
+          border-radius: 12px;
+          padding: 12px;
+          background: rgba(127,127,127,.08);
+        }
+        h3 {
+          margin: 0 0 10px 0;
+          font-size: 14px;
+          font-weight: 700;
+        }
+        .field { margin: 0 0 10px 0; }
+        .field label {
+          display:block;
+          font-size: 12px;
+          opacity: .8;
+          margin-bottom: 4px;
+        }
+        input {
+          width: 100%;
+          box-sizing: border-box;
+          padding: 8px 10px;
+          border-radius: 8px;
+          border: 1px solid rgba(127,127,127,.45);
+          background: transparent;
+          color: inherit;
+          font-size: 13px;
+        }
+        .btn {
+          padding: 8px 10px;
+          border-radius: 8px;
+          border: 1px solid rgba(127,127,127,.45);
+          background: transparent;
+          color: inherit;
+          cursor: pointer;
+          font-size: 12px;
+        }
+        .btn.danger {
+          border-color: rgba(255,80,80,.5);
+          color: rgba(255,80,80,.95);
+        }
+        .btn.primary {
+          border-color: rgba(90,170,255,.55);
+          color: rgba(90,170,255,.95);
+        }
+        .rows { display: grid; gap: 8px; }
+        .row {
+          display: grid;
+          grid-template-columns: minmax(180px, 1.2fr) minmax(130px, 1fr) 90px 90px auto;
+          gap: 8px;
+          align-items: center;
+        }
+        .row-head {
+          display: grid;
+          grid-template-columns: minmax(180px, 1.2fr) minmax(130px, 1fr) 90px 90px auto;
+          gap: 8px;
+          font-size: 11px;
+          opacity: .75;
+          margin: 0 0 6px 0;
+        }
+        .empty {
+          font-size: 12px;
+          opacity: .75;
+          padding: 8px 0;
+        }
+      </style>
+      <div class="wrap">
+        <div class="card">
+          <h3>Setari Card</h3>
+          <div class="field">
+            <label>Titlu</label>
+            <input id="title" type="text" value="${this._escape(c.title || "")}" placeholder="Apa menajera" />
+          </div>
+          <div class="field">
+            <label>Imagine fundal (URL)</label>
+            <input id="background" type="text" value="${this._escape(bg)}" placeholder="/hacsfiles/apa-menajera-card/card.png" />
+          </div>
+          <h3>Senzori (Markers)</h3>
+          <div class="row-head">
+            <div>Entity</div>
+            <div>Label</div>
+            <div>X</div>
+            <div>Y</div>
+            <div>Actiune</div>
+          </div>
+          <div class="rows">${rows}</div>
+          <div style="margin-top:8px;">
+            <button id="add-marker" class="btn primary" type="button">Adauga marker</button>
+          </div>
+        </div>
+      </div>
+    `;
+
+    const titleEl = this.shadowRoot.getElementById("title");
+    const bgEl = this.shadowRoot.getElementById("background");
+    if (titleEl) {
+      titleEl.addEventListener("input", (ev) => this._onTitleChange(ev));
+    }
+    if (bgEl) {
+      bgEl.addEventListener("input", (ev) => this._onBackgroundChange(ev));
+    }
+
+    const addBtn = this.shadowRoot.getElementById("add-marker");
+    if (addBtn) {
+      addBtn.addEventListener("click", () => this._addMarker());
+    }
+
+    this.shadowRoot.querySelectorAll("input[data-marker-idx]").forEach((el) => {
+      const idx = Number(el.getAttribute("data-marker-idx"));
+      const field = el.getAttribute("data-field");
+      el.addEventListener("input", (ev) => this._onMarkerFieldChange(idx, field, ev.target.value));
+    });
+
+    this.shadowRoot.querySelectorAll("button[data-remove-idx]").forEach((el) => {
+      const idx = Number(el.getAttribute("data-remove-idx"));
+      el.addEventListener("click", () => this._removeMarker(idx));
+    });
+  }
+
+  _escape(s) {
+    return String(s ?? "").replace(/[&<>"']/g, (m) => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;" }[m]));
+  }
+}
 customElements.define(CARD_TAG, ApaMenajeraCard);
+customElements.define("apa-menajera-card-editor", ApaMenajeraCardEditor);
 
 window.customCards = window.customCards || [];
 window.customCards.push({
   type: CARD_TAG,
-  name: "Card Apă Menajeră",
+  name: "Card ApÄƒ MenajerÄƒ",
   description: "Imagine + overlay-uri (PNG) + marker-e + trasee animate (solar/electric).",
   preview: true
 });
 
 console.info(`[${CARD_TAG}] loaded v${CARD_VERSION}`);
+
