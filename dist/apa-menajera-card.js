@@ -137,6 +137,9 @@ class ApaMenajeraCard extends HTMLElement {
       marker_label_bg_color: "#ffffff",
       marker_label_bg_opacity: 0.8,
       marker_label_text_color: "#ff9933",
+      filter_reset_entity: "input_number.filtru_zile_ramase",
+      filter_reset_value: 30,
+      filter_reset_button: true,
     };
   }
 
@@ -176,7 +179,10 @@ class ApaMenajeraCard extends HTMLElement {
       maxHeight: config.max_height ?? null,               // e.g. "70vh"
       markerLabelBgColor: config.marker_label_bg_color ?? "#ffffff",
       markerLabelBgOpacity: Number.isFinite(Number(config.marker_label_bg_opacity)) ? Number(config.marker_label_bg_opacity) : 0.8,
-      markerLabelTextColor: config.marker_label_text_color ?? "#ff9933"
+      markerLabelTextColor: config.marker_label_text_color ?? "#ff9933",
+      filterResetEntity: config.filter_reset_entity ?? "input_number.filtru_zile_ramase",
+      filterResetValue: Number.isFinite(Number(config.filter_reset_value)) ? Number(config.filter_reset_value) : 30,
+      filterResetButton: config.filter_reset_button !== false
     };
 
     this._renderBase();
@@ -374,6 +380,24 @@ class ApaMenajeraCard extends HTMLElement {
           font-size: 12px;
           border: 1px solid rgba(255,255,255,.12);
         }
+        .fab-reset {
+          position: absolute;
+          right: 12px;
+          bottom: 12px;
+          width: 48px;
+          height: 48px;
+          border-radius: 999px;
+          border: 1px solid rgba(150, 215, 255, .95);
+          background: rgba(255, 255, 255, .80);
+          color: #ff9933;
+          font-size: 18px;
+          font-weight: 800;
+          line-height: 1;
+          cursor: pointer;
+          z-index: 7;
+          box-shadow: 0 0 12px rgba(95, 185, 255, .55);
+        }
+        .fab-reset[hidden] { display: none; }
         .wrap {
           position: relative;
           width: 100%;
@@ -475,6 +499,7 @@ class ApaMenajeraCard extends HTMLElement {
           <img class="bg" id="bg" alt="background" />
           <div id="ovls"></div>
           <svg class="overlay" id="svg" viewBox="0 0 ${vb.w} ${vb.h}" preserveAspectRatio="xMidYMid meet"></svg>
+          <button class="fab-reset" id="fab-reset" type="button" title="Reset filtru">30</button>
         </div>
       </ha-card>
     `;
@@ -483,7 +508,9 @@ class ApaMenajeraCard extends HTMLElement {
     this._els.bg = this.shadowRoot.getElementById("bg");
     this._els.ovls = this.shadowRoot.getElementById("ovls");
     this._els.svg = this.shadowRoot.getElementById("svg");
+    this._els.fabReset = this.shadowRoot.getElementById("fab-reset");
     this._applyMarkerThemeVars();
+    this._wireResetButton();
 
     // constrain width on desktop
     const haCard = this.shadowRoot.querySelector("ha-card");
@@ -630,6 +657,30 @@ class ApaMenajeraCard extends HTMLElement {
     const text = String(c.markerLabelTextColor || "#ff9933");
     this.style.setProperty("--apa-marker-bg", bg);
     this.style.setProperty("--apa-marker-text", text);
+  }
+
+  _wireResetButton() {
+    const c = this._config;
+    const btn = this._els?.fabReset;
+    if (!c || !btn) return;
+
+    btn.hidden = !c.filterResetButton;
+    btn.textContent = String(c.filterResetValue);
+
+    if (this._fabResetHandler) {
+      btn.removeEventListener("click", this._fabResetHandler);
+    }
+
+    this._fabResetHandler = (ev) => {
+      ev.preventDefault();
+      ev.stopPropagation();
+      this._handleTapAction({
+        action: "set_value",
+        entity: c.filterResetEntity,
+        value: c.filterResetValue,
+      }, c.filterResetEntity);
+    };
+    btn.addEventListener("click", this._fabResetHandler);
   }
 
   _updateOverlays() {
