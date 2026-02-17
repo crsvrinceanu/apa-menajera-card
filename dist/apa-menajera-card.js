@@ -377,15 +377,17 @@ class ApaMenajeraCard extends HTMLElement {
         /* Marker styling */
         .marker { pointer-events:auto; cursor:pointer; }
         .m-bg {
-          fill: rgba(0,0,0,.40);
-          stroke: rgba(255,255,255,.15);
-          stroke-width: 1;
+          fill: rgba(0, 235, 255, .38);
+          stroke: rgba(110, 245, 255, .95);
+          stroke-width: 1.4;
+          filter: drop-shadow(0 0 9px rgba(0, 245, 255, .75));
           rx: 10; ry: 10;
           transition: fill .2s ease, stroke .2s ease;
         }
         .marker.alert .m-bg {
-          fill: rgba(255, 60, 45, .40);
-          stroke: rgba(255, 160, 150, .35);
+          fill: rgba(255, 65, 50, .52);
+          stroke: rgba(255, 180, 170, .96);
+          filter: drop-shadow(0 0 9px rgba(255, 90, 80, .8));
         }
         .m-sub { font-size:18px; fill: rgba(255,255,255,.65); font-weight:500; }
         .m-value { font-size:22px; fill: rgba(255,255,255,.95); font-weight:750; }
@@ -714,6 +716,43 @@ class ApaMenajeraCard extends HTMLElement {
       if (tVal) {
         tVal.textContent = valueText;
         this._last.markerText.set(entityId, valueText);
+
+        // Auto-size marker box to fit current text content (label + value).
+        const labelEl = g.querySelector(".m-sub");
+        const bgEl = g.querySelector(".m-bg");
+        if (labelEl && bgEl) {
+          const padX = 16;
+          const padTop = 12;
+          const gap = 10;
+          const padBottom = 14;
+          const minW = 170;
+          const minH = 70;
+
+          let labelW = 0, labelH = 0, valueW = 0, valueH = 0;
+          try {
+            const lb = labelEl.getBBox();
+            labelW = lb.width || 0;
+            labelH = lb.height || 0;
+          } catch (e) {}
+          try {
+            const vb = tVal.getBBox();
+            valueW = vb.width || 0;
+            valueH = vb.height || 0;
+          } catch (e) {}
+
+          const boxW = Math.max(minW, Math.ceil(Math.max(labelW, valueW) + (padX * 2)));
+          const boxH = Math.max(minH, Math.ceil(labelH + gap + valueH + padTop + padBottom));
+
+          bgEl.setAttribute("width", String(boxW));
+          bgEl.setAttribute("height", String(boxH));
+
+          const baseX = Number(bgEl.getAttribute("x") || "0");
+          const baseY = Number(bgEl.getAttribute("y") || "0");
+          labelEl.setAttribute("x", String(baseX + padX));
+          labelEl.setAttribute("y", String(baseY + padTop + 18));
+          tVal.setAttribute("x", String(baseX + padX));
+          tVal.setAttribute("y", String(baseY + boxH - padBottom));
+        }
       }
 
       const alert = this._markerIsAlert(cfg, st);
