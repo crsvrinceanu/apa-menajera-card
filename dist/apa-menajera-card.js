@@ -739,6 +739,7 @@ class ApaMenajeraCardEditor extends HTMLElement {
     super();
     this.attachShadow({ mode: "open" });
     this._config = {};
+    this._openMarkerIdx = -1;
   }
 
   setConfig(config) {
@@ -810,6 +811,8 @@ class ApaMenajeraCardEditor extends HTMLElement {
       y: 100,
     });
     this._updateMarkers(markers);
+    this._openMarkerIdx = markers.length - 1;
+    this._render();
   }
 
   _removeMarker(idx) {
@@ -817,6 +820,14 @@ class ApaMenajeraCardEditor extends HTMLElement {
     if (!markers[idx]) return;
     markers.splice(idx, 1);
     this._updateMarkers(markers);
+    if (this._openMarkerIdx === idx) this._openMarkerIdx = -1;
+    if (this._openMarkerIdx > idx) this._openMarkerIdx -= 1;
+    this._render();
+  }
+
+  _toggleMarker(idx) {
+    this._openMarkerIdx = (this._openMarkerIdx === idx) ? -1 : idx;
+    this._render();
   }
 
   _render() {
@@ -827,37 +838,47 @@ class ApaMenajeraCardEditor extends HTMLElement {
     const rows = markers.length
       ? markers.map((m, idx) => `
           <div class="row">
-            <input
-              data-marker-idx="${idx}"
-              data-field="entity"
-              type="text"
-              value="${this._escape(m?.entity || "")}"
-              placeholder="sensor.exemplu"
-            />
-            <input
-              data-marker-idx="${idx}"
-              data-field="label"
-              type="text"
-              value="${this._escape(m?.label || "")}"
-              placeholder="Nume senzor"
-            />
-            <input
-              data-marker-idx="${idx}"
-              data-field="x"
-              type="number"
-              step="1"
-              value="${(m?.x != null) ? String(m.x) : ""}"
-              placeholder="x"
-            />
-            <input
-              data-marker-idx="${idx}"
-              data-field="y"
-              type="number"
-              step="1"
-              value="${(m?.y != null) ? String(m.y) : ""}"
-              placeholder="y"
-            />
-            <button class="btn danger" data-remove-idx="${idx}" type="button">Sterge</button>
+            <button class="row-toggle" data-toggle-idx="${idx}" type="button">
+              <span class="row-title">${this._escape(m?.label || `Marker ${idx + 1}`)}</span>
+              <span class="row-sub">${this._escape(m?.entity || "fara entity")} | x:${(m?.x != null) ? String(m.x) : "-"} y:${(m?.y != null) ? String(m.y) : "-"}</span>
+            </button>
+            <div class="row-body ${this._openMarkerIdx === idx ? "open" : ""}">
+              <div class="grid">
+                <input
+                  data-marker-idx="${idx}"
+                  data-field="entity"
+                  type="text"
+                  value="${this._escape(m?.entity || "")}"
+                  placeholder="sensor.exemplu"
+                />
+                <input
+                  data-marker-idx="${idx}"
+                  data-field="label"
+                  type="text"
+                  value="${this._escape(m?.label || "")}"
+                  placeholder="Nume senzor"
+                />
+                <input
+                  data-marker-idx="${idx}"
+                  data-field="x"
+                  type="number"
+                  step="1"
+                  value="${(m?.x != null) ? String(m.x) : ""}"
+                  placeholder="x"
+                />
+                <input
+                  data-marker-idx="${idx}"
+                  data-field="y"
+                  type="number"
+                  step="1"
+                  value="${(m?.y != null) ? String(m.y) : ""}"
+                  placeholder="y"
+                />
+              </div>
+              <div class="row-actions">
+                <button class="btn danger" data-remove-idx="${idx}" type="button">Sterge</button>
+              </div>
+            </div>
           </div>
         `).join("")
       : `<div class="empty">Nu ai markere configurate. Adauga primul marker din buton.</div>`;
@@ -913,23 +934,54 @@ class ApaMenajeraCardEditor extends HTMLElement {
         }
         .rows { display: grid; gap: 8px; }
         .row {
-          display: grid;
-          grid-template-columns: minmax(180px, 1.2fr) minmax(130px, 1fr) 90px 90px auto;
-          gap: 8px;
-          align-items: center;
+          border: 1px solid rgba(127,127,127,.35);
+          border-radius: 10px;
+          overflow: hidden;
+          background: rgba(127,127,127,.05);
         }
-        .row-head {
+        .row-toggle {
+          width: 100%;
+          text-align: left;
+          background: transparent;
+          border: 0;
+          color: inherit;
+          cursor: pointer;
+          padding: 8px 10px;
           display: grid;
-          grid-template-columns: minmax(180px, 1.2fr) minmax(130px, 1fr) 90px 90px auto;
-          gap: 8px;
+          gap: 3px;
+        }
+        .row-title {
+          font-size: 13px;
+          font-weight: 700;
+          line-height: 1.2;
+        }
+        .row-sub {
           font-size: 11px;
           opacity: .75;
-          margin: 0 0 6px 0;
+          line-height: 1.2;
+          font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+        }
+        .row-body {
+          display: none;
+          padding: 8px 10px 10px;
+          border-top: 1px solid rgba(127,127,127,.25);
+        }
+        .row-body.open { display: block; }
+        .grid {
+          display: grid;
+          grid-template-columns: 1fr 1fr 88px 88px;
+          gap: 8px;
+        }
+        .row-actions {
+          margin-top: 8px;
         }
         .empty {
           font-size: 12px;
           opacity: .75;
           padding: 8px 0;
+        }
+        @media (max-width: 620px) {
+          .grid { grid-template-columns: 1fr 1fr; }
         }
       </style>
       <div class="wrap">
@@ -944,13 +996,6 @@ class ApaMenajeraCardEditor extends HTMLElement {
             <input id="background" type="text" value="${this._escape(bg)}" placeholder="/hacsfiles/apa-menajera-card/card.png" />
           </div>
           <h3>Senzori (Markers)</h3>
-          <div class="row-head">
-            <div>Entity</div>
-            <div>Label</div>
-            <div>X</div>
-            <div>Y</div>
-            <div>Actiune</div>
-          </div>
           <div class="rows">${rows}</div>
           <div style="margin-top:8px;">
             <button id="add-marker" class="btn primary" type="button">Adauga marker</button>
@@ -982,6 +1027,11 @@ class ApaMenajeraCardEditor extends HTMLElement {
     this.shadowRoot.querySelectorAll("button[data-remove-idx]").forEach((el) => {
       const idx = Number(el.getAttribute("data-remove-idx"));
       el.addEventListener("click", () => this._removeMarker(idx));
+    });
+
+    this.shadowRoot.querySelectorAll("button[data-toggle-idx]").forEach((el) => {
+      const idx = Number(el.getAttribute("data-toggle-idx"));
+      el.addEventListener("click", () => this._toggleMarker(idx));
     });
   }
 
