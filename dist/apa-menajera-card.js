@@ -565,9 +565,9 @@ class ApaMenajeraCard extends HTMLElement {
     });
   }
 
-  _handleOverlayTap(overlayCfg) {
+  _handleTapAction(tapAction, fallbackEntityId) {
     try {
-      const ta = overlayCfg?.tap_action;
+      const ta = tapAction;
       if (!ta || typeof ta !== "object") return;
 
       const msg = ta.confirm || ta.confirmation || "";
@@ -577,14 +577,16 @@ class ApaMenajeraCard extends HTMLElement {
       }
 
       if (ta.action === "set_value") {
-        const entityId = ta.entity || overlayCfg.entity;
+        const entityId = ta.entity || fallbackEntityId;
         const value = ta.value;
         if (!entityId || value == null) return;
 
         const domain = String(entityId).split(".")[0];
         const serviceDomain = (domain === "number") ? "number" : "input_number";
         const service = "set_value";
-        const serviceData = { entity_id: entityId, value: Number(value) };
+        const num = Number(value);
+        if (!Number.isFinite(num)) return;
+        const serviceData = { entity_id: entityId, value: num };
 
         if (this._hass?.callService) {
           this._hass.callService(serviceDomain, service, serviceData);
@@ -609,12 +611,16 @@ class ApaMenajeraCard extends HTMLElement {
       }
 
       if (ta.action === "more-info") {
-        const entityId = ta.entity || overlayCfg.entity;
+        const entityId = ta.entity || fallbackEntityId;
         if (entityId) fireEvent(this, "hass-more-info", { entityId });
       }
     } catch (e) {
-      console.warn(`[${CARD_TAG}] overlay tap action failed`, e);
+      console.warn(`[${CARD_TAG}] tap action failed`, e);
     }
+  }
+
+  _handleOverlayTap(overlayCfg) {
+    this._handleTapAction(overlayCfg?.tap_action, overlayCfg?.entity);
   }
 
   _applyMarkerThemeVars() {
@@ -728,7 +734,13 @@ class ApaMenajeraCard extends HTMLElement {
 
       gMarkers.appendChild(g);
 
-      g.addEventListener("click", () => {
+      g.addEventListener("click", (ev) => {
+        ev.preventDefault();
+        ev.stopPropagation();
+        if (m.tap_action) {
+          this._handleTapAction(m.tap_action, m.entity);
+          return;
+        }
         fireEvent(this, "hass-more-info", { entityId: m.entity });
       });
     });
