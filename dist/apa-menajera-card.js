@@ -377,7 +377,7 @@ class ApaMenajeraCard extends HTMLElement {
         /* Marker styling */
         .marker { pointer-events:auto; cursor:pointer; }
         .m-bg {
-          fill: rgba(75, 165, 255, .46);
+          fill: rgba(255, 255, 255, .30);
           stroke: rgba(150, 215, 255, .98);
           stroke-width: 1.2;
           filter: drop-shadow(0 0 8px rgba(95, 185, 255, .82));
@@ -389,8 +389,8 @@ class ApaMenajeraCard extends HTMLElement {
           stroke: rgba(255, 180, 170, .96);
           filter: drop-shadow(0 0 9px rgba(255, 90, 80, .8));
         }
-        .m-sub { font-size:15px; fill: rgba(255,255,255,.72); font-weight:550; }
-        .m-value { font-size:18px; fill: rgba(255,255,255,.96); font-weight:730; }
+        .m-sub { font-size:15px; fill: #ff9933; font-weight:550; text-anchor: middle; }
+        .m-value { font-size:18px; fill: #ff9933; font-weight:730; text-anchor: middle; }
 
         /* Debug */
         .dbg { pointer-events:auto; }
@@ -748,9 +748,10 @@ class ApaMenajeraCard extends HTMLElement {
 
           const baseX = Number(bgEl.getAttribute("x") || "0");
           const baseY = Number(bgEl.getAttribute("y") || "0");
-          labelEl.setAttribute("x", String(baseX + padX));
+          const cx = baseX + (boxW / 2);
+          labelEl.setAttribute("x", String(cx));
           labelEl.setAttribute("y", String(baseY + padTop + 14));
-          tVal.setAttribute("x", String(baseX + padX));
+          tVal.setAttribute("x", String(cx));
           tVal.setAttribute("y", String(baseY + boxH - padBottom + 1));
         }
       }
