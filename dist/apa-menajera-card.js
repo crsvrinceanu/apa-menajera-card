@@ -391,7 +391,7 @@ class ApaMenajeraCard extends HTMLElement {
         }
 
         /* overlay images stacked above bg */
-        #ovls { position:absolute; inset:0; z-index:2; pointer-events:none; }
+        #ovls { position:absolute; inset:0; z-index:2; pointer-events:auto; }
         img.ovl {
           position:absolute;
           left: 0;
@@ -402,6 +402,7 @@ class ApaMenajeraCard extends HTMLElement {
           object-position: center;
           opacity: 1;
           display:none;
+          pointer-events:none;
         }
 
         svg.overlay {
@@ -551,8 +552,66 @@ class ApaMenajeraCard extends HTMLElement {
         img.style.height = "100%";
       }
 
+      if (o.tap_action) {
+        img.style.pointerEvents = "auto";
+        img.style.cursor = "pointer";
+        img.addEventListener("click", (ev) => {
+          ev.preventDefault();
+          ev.stopPropagation();
+          this._handleOverlayTap(o);
+        });
+      }
+
       ovls.appendChild(img);
     });
+  }
+
+  _handleOverlayTap(overlayCfg) {
+    const ta = overlayCfg?.tap_action;
+    if (!ta || typeof ta !== "object") return;
+
+    const msg = ta.confirm || ta.confirmation || "";
+    if (msg) {
+      const ok = window.confirm(String(msg));
+      if (!ok) return;
+    }
+
+    if (ta.action === "set_value") {
+      const entityId = ta.entity || overlayCfg.entity;
+      const value = ta.value;
+      if (!entityId || value == null) return;
+
+      const domain = String(entityId).split(".")[0];
+      const serviceDomain = (domain === "number") ? "number" : "input_number";
+      const service = "set_value";
+      const serviceData = { entity_id: entityId, value: Number(value) };
+
+      if (this._hass?.callService) {
+        this._hass.callService(serviceDomain, service, serviceData);
+      } else {
+        fireEvent(this, "hass-call-service", { domain: serviceDomain, service, serviceData });
+      }
+      return;
+    }
+
+    if (ta.action === "call-service") {
+      const service = String(ta.service || "");
+      if (!service.includes(".")) return;
+      const [domain, serviceName] = service.split(".");
+      const serviceData = { ...(ta.service_data || ta.data || {}) };
+      if (ta.entity) serviceData.entity_id = ta.entity;
+      if (this._hass?.callService) {
+        this._hass.callService(domain, serviceName, serviceData);
+      } else {
+        fireEvent(this, "hass-call-service", { domain, service: serviceName, serviceData });
+      }
+      return;
+    }
+
+    if (ta.action === "more-info") {
+      const entityId = ta.entity || overlayCfg.entity;
+      if (entityId) fireEvent(this, "hass-more-info", { entityId });
+    }
   }
 
   _applyMarkerThemeVars() {
