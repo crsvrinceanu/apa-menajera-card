@@ -28,6 +28,46 @@ function norm(v) {
   return (v ?? "").toString().trim().toLowerCase();
 }
 
+function clamp(n, min, max) {
+  return Math.min(max, Math.max(min, n));
+}
+
+function colorWithOpacity(color, opacity, fallback = "rgba(255, 255, 255, .8)") {
+  const c = String(color ?? "").trim();
+  const a = clamp(Number(opacity), 0, 1);
+  if (!c || !Number.isFinite(a)) return fallback;
+
+  if (/^#([0-9a-f]{3})$/i.test(c)) {
+    const hex = c.slice(1);
+    const r = parseInt(hex[0] + hex[0], 16);
+    const g = parseInt(hex[1] + hex[1], 16);
+    const b = parseInt(hex[2] + hex[2], 16);
+    return `rgba(${r}, ${g}, ${b}, ${a})`;
+  }
+  if (/^#([0-9a-f]{6})$/i.test(c)) {
+    const hex = c.slice(1);
+    const r = parseInt(hex.slice(0, 2), 16);
+    const g = parseInt(hex.slice(2, 4), 16);
+    const b = parseInt(hex.slice(4, 6), 16);
+    return `rgba(${r}, ${g}, ${b}, ${a})`;
+  }
+  const rgb = c.match(/^rgb\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*\)$/i);
+  if (rgb) {
+    const r = clamp(Number(rgb[1]), 0, 255);
+    const g = clamp(Number(rgb[2]), 0, 255);
+    const b = clamp(Number(rgb[3]), 0, 255);
+    return `rgba(${r}, ${g}, ${b}, ${a})`;
+  }
+  const rgba = c.match(/^rgba\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*,\s*([0-9.]+)\s*\)$/i);
+  if (rgba) {
+    const r = clamp(Number(rgba[1]), 0, 255);
+    const g = clamp(Number(rgba[2]), 0, 255);
+    const b = clamp(Number(rgba[3]), 0, 255);
+    return `rgba(${r}, ${g}, ${b}, ${a})`;
+  }
+  return fallback;
+}
+
 function isActiveState(stateObj, activeState) {
   if (!stateObj) return false;
   return norm(stateObj.state) === norm(activeState ?? "on");
@@ -73,6 +113,9 @@ class ApaMenajeraCard extends HTMLElement {
       debug: false,
       image_fit: "contain",
       max_width: "1100px",
+      marker_label_bg_color: "#ffffff",
+      marker_label_bg_opacity: 0.8,
+      marker_label_text_color: "#ff9933",
     };
   }
 
@@ -109,7 +152,10 @@ class ApaMenajeraCard extends HTMLElement {
       imageFit: config.image_fit ?? "contain",            // contain | cover
       imagePosition: config.image_position ?? "center",
       maxWidth: config.max_width ?? "1100px",             // e.g. "900px"
-      maxHeight: config.max_height ?? null                // e.g. "70vh"
+      maxHeight: config.max_height ?? null,               // e.g. "70vh"
+      markerLabelBgColor: config.marker_label_bg_color ?? "#ffffff",
+      markerLabelBgOpacity: Number.isFinite(Number(config.marker_label_bg_opacity)) ? Number(config.marker_label_bg_opacity) : 0.8,
+      markerLabelTextColor: config.marker_label_text_color ?? "#ff9933"
     };
 
     this._renderBase();
@@ -377,7 +423,7 @@ class ApaMenajeraCard extends HTMLElement {
         /* Marker styling */
         .marker { pointer-events:auto; cursor:pointer; }
         .m-bg {
-          fill: rgba(255, 255, 255, .80);
+          fill: var(--apa-marker-bg, rgba(255, 255, 255, .80));
           stroke: rgba(150, 215, 255, .98);
           stroke-width: 1.2;
           filter: drop-shadow(0 0 8px rgba(95, 185, 255, .82));
@@ -389,8 +435,8 @@ class ApaMenajeraCard extends HTMLElement {
           stroke: rgba(255, 180, 170, .96);
           filter: drop-shadow(0 0 9px rgba(255, 90, 80, .8));
         }
-        .m-sub { font-size:15px; fill: #ff9933; font-weight:550; text-anchor: middle; }
-        .m-value { font-size:18px; fill: #ff9933; font-weight:730; text-anchor: middle; }
+        .m-sub { font-size:15px; fill: var(--apa-marker-text, #ff9933); font-weight:550; text-anchor: middle; }
+        .m-value { font-size:18px; fill: var(--apa-marker-text, #ff9933); font-weight:730; text-anchor: middle; }
 
         /* Debug */
         .dbg { pointer-events:auto; }
@@ -416,6 +462,7 @@ class ApaMenajeraCard extends HTMLElement {
     this._els.bg = this.shadowRoot.getElementById("bg");
     this._els.ovls = this.shadowRoot.getElementById("ovls");
     this._els.svg = this.shadowRoot.getElementById("svg");
+    this._applyMarkerThemeVars();
 
     // constrain width on desktop
     const haCard = this.shadowRoot.querySelector("ha-card");
@@ -485,6 +532,15 @@ class ApaMenajeraCard extends HTMLElement {
 
       ovls.appendChild(img);
     });
+  }
+
+  _applyMarkerThemeVars() {
+    const c = this._config;
+    if (!c) return;
+    const bg = colorWithOpacity(c.markerLabelBgColor, c.markerLabelBgOpacity, "rgba(255, 255, 255, .8)");
+    const text = String(c.markerLabelTextColor || "#ff9933");
+    this.style.setProperty("--apa-marker-bg", bg);
+    this.style.setProperty("--apa-marker-text", text);
   }
 
   _updateOverlays() {
@@ -813,6 +869,26 @@ class ApaMenajeraCardEditor extends HTMLElement {
     this._emitConfig(next);
   }
 
+  _onMarkerBgColorChange(ev) {
+    const next = { ...(this._config || {}), marker_label_bg_color: ev.target.value || "#ffffff" };
+    this._config = next;
+    this._emitConfig(next);
+  }
+
+  _onMarkerBgOpacityChange(ev) {
+    const raw = ev.target.value;
+    const n = clamp(Number(raw), 0, 1);
+    const next = { ...(this._config || {}), marker_label_bg_opacity: Number.isFinite(n) ? n : 0.8 };
+    this._config = next;
+    this._emitConfig(next);
+  }
+
+  _onMarkerTextColorChange(ev) {
+    const next = { ...(this._config || {}), marker_label_text_color: ev.target.value || "#ff9933" };
+    this._config = next;
+    this._emitConfig(next);
+  }
+
   _updateMarkers(nextMarkers) {
     const markers = Array.isArray(nextMarkers) ? nextMarkers : [];
     const next = { ...(this._config || {}), markers };
@@ -874,6 +950,9 @@ class ApaMenajeraCardEditor extends HTMLElement {
     const c = this._config || {};
     const markers = Array.isArray(c.markers) ? c.markers : [];
     const bg = (typeof c.background === "string") ? c.background : "";
+    const markerBgColor = c.marker_label_bg_color || "#ffffff";
+    const markerBgOpacity = Number.isFinite(Number(c.marker_label_bg_opacity)) ? Number(c.marker_label_bg_opacity) : 0.8;
+    const markerTextColor = c.marker_label_text_color || "#ff9933";
 
     const rows = markers.length
       ? markers.map((m, idx) => `
@@ -1035,6 +1114,18 @@ class ApaMenajeraCardEditor extends HTMLElement {
             <label>Imagine fundal (URL)</label>
             <input id="background" type="text" value="${this._escape(bg)}" placeholder="/hacsfiles/apa-menajera-card/card.png" />
           </div>
+          <div class="field">
+            <label>Culoare fundal etichete</label>
+            <input id="marker-bg-color" type="color" value="${this._escape(markerBgColor)}" />
+          </div>
+          <div class="field">
+            <label>Opacitate fundal etichete (0-1)</label>
+            <input id="marker-bg-opacity" type="number" min="0" max="1" step="0.05" value="${String(markerBgOpacity)}" />
+          </div>
+          <div class="field">
+            <label>Culoare text etichete</label>
+            <input id="marker-text-color" type="color" value="${this._escape(markerTextColor)}" />
+          </div>
           <h3>Senzori (Markers)</h3>
           <div class="rows">${rows}</div>
           <div style="margin-top:8px;">
@@ -1046,11 +1137,23 @@ class ApaMenajeraCardEditor extends HTMLElement {
 
     const titleEl = this.shadowRoot.getElementById("title");
     const bgEl = this.shadowRoot.getElementById("background");
+    const markerBgColorEl = this.shadowRoot.getElementById("marker-bg-color");
+    const markerBgOpacityEl = this.shadowRoot.getElementById("marker-bg-opacity");
+    const markerTextColorEl = this.shadowRoot.getElementById("marker-text-color");
     if (titleEl) {
       titleEl.addEventListener("input", (ev) => this._onTitleChange(ev));
     }
     if (bgEl) {
       bgEl.addEventListener("input", (ev) => this._onBackgroundChange(ev));
+    }
+    if (markerBgColorEl) {
+      markerBgColorEl.addEventListener("input", (ev) => this._onMarkerBgColorChange(ev));
+    }
+    if (markerBgOpacityEl) {
+      markerBgOpacityEl.addEventListener("input", (ev) => this._onMarkerBgOpacityChange(ev));
+    }
+    if (markerTextColorEl) {
+      markerTextColorEl.addEventListener("input", (ev) => this._onMarkerTextColorChange(ev));
     }
 
     const addBtn = this.shadowRoot.getElementById("add-marker");
