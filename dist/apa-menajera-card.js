@@ -140,6 +140,7 @@ class ApaMenajeraCard extends HTMLElement {
       filter_reset_entity: "input_number.filtru_zile_ramase",
       filter_reset_value: 30,
       filter_reset_button: true,
+      filter_reset_show_below: 30,
     };
   }
 
@@ -182,7 +183,8 @@ class ApaMenajeraCard extends HTMLElement {
       markerLabelTextColor: config.marker_label_text_color ?? "#ff9933",
       filterResetEntity: config.filter_reset_entity ?? "input_number.filtru_zile_ramase",
       filterResetValue: Number.isFinite(Number(config.filter_reset_value)) ? Number(config.filter_reset_value) : 30,
-      filterResetButton: config.filter_reset_button !== false
+      filterResetButton: config.filter_reset_button !== false,
+      filterResetShowBelow: Number.isFinite(Number(config.filter_reset_show_below)) ? Number(config.filter_reset_show_below) : 30
     };
 
     this._renderBase();
@@ -384,13 +386,14 @@ class ApaMenajeraCard extends HTMLElement {
           position: absolute;
           right: 12px;
           bottom: 12px;
-          width: 48px;
+          min-width: 64px;
           height: 48px;
+          padding: 0 14px;
           border-radius: 999px;
           border: 1px solid rgba(150, 215, 255, .95);
-          background: rgba(255, 255, 255, .80);
-          color: #ff9933;
-          font-size: 18px;
+          background: var(--apa-marker-bg, rgba(255, 255, 255, .80));
+          color: var(--apa-marker-text, #ff9933);
+          font-size: 14px;
           font-weight: 800;
           line-height: 1;
           cursor: pointer;
@@ -499,7 +502,7 @@ class ApaMenajeraCard extends HTMLElement {
           <img class="bg" id="bg" alt="background" />
           <div id="ovls"></div>
           <svg class="overlay" id="svg" viewBox="0 0 ${vb.w} ${vb.h}" preserveAspectRatio="xMidYMid meet"></svg>
-          <button class="fab-reset" id="fab-reset" type="button" title="Reset filtru">30</button>
+          <button class="fab-reset" id="fab-reset" type="button" title="Reset filtru">RESET</button>
         </div>
       </ha-card>
     `;
@@ -664,8 +667,7 @@ class ApaMenajeraCard extends HTMLElement {
     const btn = this._els?.fabReset;
     if (!c || !btn) return;
 
-    btn.hidden = !c.filterResetButton;
-    btn.textContent = String(c.filterResetValue);
+    btn.textContent = "RESET";
 
     if (this._fabResetHandler) {
       btn.removeEventListener("click", this._fabResetHandler);
@@ -681,6 +683,27 @@ class ApaMenajeraCard extends HTMLElement {
       }, c.filterResetEntity);
     };
     btn.addEventListener("click", this._fabResetHandler);
+    this._updateResetButtonVisibility();
+  }
+
+  _updateResetButtonVisibility() {
+    const c = this._config;
+    const hass = this._hass;
+    const btn = this._els?.fabReset;
+    if (!c || !btn) return;
+
+    if (!c.filterResetButton || !hass) {
+      btn.hidden = true;
+      return;
+    }
+
+    const st = getEntity(hass, c.filterResetEntity);
+    const n = numState(st);
+    if (n == null) {
+      btn.hidden = true;
+      return;
+    }
+    btn.hidden = !(n < c.filterResetShowBelow);
   }
 
   _updateOverlays() {
@@ -901,6 +924,7 @@ class ApaMenajeraCard extends HTMLElement {
     try { this._updateOverlays(); } catch (e) {
       if (c.debug) console.warn(`[${CARD_TAG}] overlays update failed`, e);
     }
+    this._updateResetButtonVisibility();
 
     if (c.debug) {
       const ids = this._collectEntityIds();
