@@ -140,7 +140,7 @@ class ApaMenajeraCard extends HTMLElement {
       filter_reset_entity: "input_number.filtru_zile_ramase",
       filter_reset_value: 30,
       filter_reset_button: true,
-      filter_reset_show_below: 30,
+      filter_reset_show_below: 3,
     };
   }
 
@@ -184,7 +184,7 @@ class ApaMenajeraCard extends HTMLElement {
       filterResetEntity: config.filter_reset_entity ?? "input_number.filtru_zile_ramase",
       filterResetValue: Number.isFinite(Number(config.filter_reset_value)) ? Number(config.filter_reset_value) : 30,
       filterResetButton: config.filter_reset_button !== false,
-      filterResetShowBelow: Number.isFinite(Number(config.filter_reset_show_below)) ? Number(config.filter_reset_show_below) : 30
+      filterResetShowBelow: Number.isFinite(Number(config.filter_reset_show_below)) ? Number(config.filter_reset_show_below) : 3
     };
 
     this._renderBase();
