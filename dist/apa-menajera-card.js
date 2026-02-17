@@ -28,6 +28,46 @@ function norm(v) {
   return (v ?? "").toString().trim().toLowerCase();
 }
 
+function clamp(n, min, max) {
+  return Math.min(max, Math.max(min, n));
+}
+
+function colorWithOpacity(color, opacity, fallback = "rgba(255, 255, 255, .8)") {
+  const c = String(color ?? "").trim();
+  const a = clamp(Number(opacity), 0, 1);
+  if (!c || !Number.isFinite(a)) return fallback;
+
+  if (/^#([0-9a-f]{3})$/i.test(c)) {
+    const hex = c.slice(1);
+    const r = parseInt(hex[0] + hex[0], 16);
+    const g = parseInt(hex[1] + hex[1], 16);
+    const b = parseInt(hex[2] + hex[2], 16);
+    return `rgba(${r}, ${g}, ${b}, ${a})`;
+  }
+  if (/^#([0-9a-f]{6})$/i.test(c)) {
+    const hex = c.slice(1);
+    const r = parseInt(hex.slice(0, 2), 16);
+    const g = parseInt(hex.slice(2, 4), 16);
+    const b = parseInt(hex.slice(4, 6), 16);
+    return `rgba(${r}, ${g}, ${b}, ${a})`;
+  }
+  const rgb = c.match(/^rgb\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*\)$/i);
+  if (rgb) {
+    const r = clamp(Number(rgb[1]), 0, 255);
+    const g = clamp(Number(rgb[2]), 0, 255);
+    const b = clamp(Number(rgb[3]), 0, 255);
+    return `rgba(${r}, ${g}, ${b}, ${a})`;
+  }
+  const rgba = c.match(/^rgba\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*,\s*([0-9.]+)\s*\)$/i);
+  if (rgba) {
+    const r = clamp(Number(rgba[1]), 0, 255);
+    const g = clamp(Number(rgba[2]), 0, 255);
+    const b = clamp(Number(rgba[3]), 0, 255);
+    return `rgba(${r}, ${g}, ${b}, ${a})`;
+  }
+  return fallback;
+}
+
 function isActiveState(stateObj, activeState) {
   if (!stateObj) return false;
   return norm(stateObj.state) === norm(activeState ?? "on");
@@ -47,6 +87,27 @@ function numState(stateObj) {
   if (s === "unknown" || s === "unavailable") return null;
   const n = Number(s);
   return Number.isFinite(n) ? n : null;
+}
+
+function matchOverlayCondition(stateObj, cfg) {
+  if (!stateObj || !cfg) return false;
+
+  const n = numState(stateObj);
+  const hasNumericRule =
+    cfg.lt != null || cfg.lte != null || cfg.gt != null || cfg.gte != null ||
+    cfg.below != null || cfg.above != null;
+
+  if (hasNumericRule && n != null) {
+    if (cfg.lt != null && !(n < Number(cfg.lt))) return false;
+    if (cfg.lte != null && !(n <= Number(cfg.lte))) return false;
+    if (cfg.gt != null && !(n > Number(cfg.gt))) return false;
+    if (cfg.gte != null && !(n >= Number(cfg.gte))) return false;
+    if (cfg.below != null && !(n < Number(cfg.below))) return false;
+    if (cfg.above != null && !(n > Number(cfg.above))) return false;
+    return true;
+  }
+
+  return isActiveState(stateObj, cfg.state ?? "on");
 }
 
 class ApaMenajeraCard extends HTMLElement {
@@ -73,6 +134,9 @@ class ApaMenajeraCard extends HTMLElement {
       debug: false,
       image_fit: "contain",
       max_width: "1100px",
+      marker_label_bg_color: "#ffffff",
+      marker_label_bg_opacity: 0.8,
+      marker_label_text_color: "#ff9933",
     };
   }
 
@@ -109,7 +173,10 @@ class ApaMenajeraCard extends HTMLElement {
       imageFit: config.image_fit ?? "contain",            // contain | cover
       imagePosition: config.image_position ?? "center",
       maxWidth: config.max_width ?? "1100px",             // e.g. "900px"
-      maxHeight: config.max_height ?? null                // e.g. "70vh"
+      maxHeight: config.max_height ?? null,               // e.g. "70vh"
+      markerLabelBgColor: config.marker_label_bg_color ?? "#ffffff",
+      markerLabelBgOpacity: Number.isFinite(Number(config.marker_label_bg_opacity)) ? Number(config.marker_label_bg_opacity) : 0.8,
+      markerLabelTextColor: config.marker_label_text_color ?? "#ff9933"
     };
 
     this._renderBase();
@@ -324,7 +391,7 @@ class ApaMenajeraCard extends HTMLElement {
         }
 
         /* overlay images stacked above bg */
-        #ovls { position:absolute; inset:0; z-index:2; pointer-events:none; }
+        #ovls { position:absolute; inset:0; z-index:2; pointer-events:auto; }
         img.ovl {
           position:absolute;
           left: 0;
@@ -335,6 +402,7 @@ class ApaMenajeraCard extends HTMLElement {
           object-position: center;
           opacity: 1;
           display:none;
+          pointer-events:none;
         }
 
         svg.overlay {
@@ -377,7 +445,7 @@ class ApaMenajeraCard extends HTMLElement {
         /* Marker styling */
         .marker { pointer-events:auto; cursor:pointer; }
         .m-bg {
-          fill: rgba(255, 255, 255, .30);
+          fill: var(--apa-marker-bg, rgba(255, 255, 255, .80));
           stroke: rgba(150, 215, 255, .98);
           stroke-width: 1.2;
           filter: drop-shadow(0 0 8px rgba(95, 185, 255, .82));
@@ -385,12 +453,11 @@ class ApaMenajeraCard extends HTMLElement {
           transition: fill .2s ease, stroke .2s ease;
         }
         .marker.alert .m-bg {
-          fill: rgba(255, 65, 50, .52);
-          stroke: rgba(255, 180, 170, .96);
-          filter: drop-shadow(0 0 9px rgba(255, 90, 80, .8));
+          /* Keep marker theme colors from config even in alert mode */
+          fill: var(--apa-marker-bg, rgba(255, 255, 255, .80));
         }
-        .m-sub { font-size:15px; fill: #ff9933; font-weight:550; text-anchor: middle; }
-        .m-value { font-size:18px; fill: #ff9933; font-weight:730; text-anchor: middle; }
+        .m-sub { font-size:15px; fill: var(--apa-marker-text, #ff9933); font-weight:550; text-anchor: middle; }
+        .m-value { font-size:18px; fill: var(--apa-marker-text, #ff9933); font-weight:730; text-anchor: middle; }
 
         /* Debug */
         .dbg { pointer-events:auto; }
@@ -416,6 +483,7 @@ class ApaMenajeraCard extends HTMLElement {
     this._els.bg = this.shadowRoot.getElementById("bg");
     this._els.ovls = this.shadowRoot.getElementById("ovls");
     this._els.svg = this.shadowRoot.getElementById("svg");
+    this._applyMarkerThemeVars();
 
     // constrain width on desktop
     const haCard = this.shadowRoot.querySelector("ha-card");
@@ -483,8 +551,79 @@ class ApaMenajeraCard extends HTMLElement {
         img.style.height = "100%";
       }
 
+      if (o.tap_action) {
+        img.style.pointerEvents = "auto";
+        img.style.cursor = "pointer";
+        img.addEventListener("click", (ev) => {
+          ev.preventDefault();
+          ev.stopPropagation();
+          this._handleOverlayTap(o);
+        });
+      }
+
       ovls.appendChild(img);
     });
+  }
+
+  _handleOverlayTap(overlayCfg) {
+    try {
+      const ta = overlayCfg?.tap_action;
+      if (!ta || typeof ta !== "object") return;
+
+      const msg = ta.confirm || ta.confirmation || "";
+      if (msg) {
+        const ok = window.confirm(String(msg));
+        if (!ok) return;
+      }
+
+      if (ta.action === "set_value") {
+        const entityId = ta.entity || overlayCfg.entity;
+        const value = ta.value;
+        if (!entityId || value == null) return;
+
+        const domain = String(entityId).split(".")[0];
+        const serviceDomain = (domain === "number") ? "number" : "input_number";
+        const service = "set_value";
+        const serviceData = { entity_id: entityId, value: Number(value) };
+
+        if (this._hass?.callService) {
+          this._hass.callService(serviceDomain, service, serviceData);
+        } else {
+          fireEvent(this, "hass-call-service", { domain: serviceDomain, service, serviceData });
+        }
+        return;
+      }
+
+      if (ta.action === "call-service") {
+        const service = String(ta.service || "");
+        if (!service.includes(".")) return;
+        const [domain, serviceName] = service.split(".");
+        const serviceData = { ...(ta.service_data || ta.data || {}) };
+        if (ta.entity) serviceData.entity_id = ta.entity;
+        if (this._hass?.callService) {
+          this._hass.callService(domain, serviceName, serviceData);
+        } else {
+          fireEvent(this, "hass-call-service", { domain, service: serviceName, serviceData });
+        }
+        return;
+      }
+
+      if (ta.action === "more-info") {
+        const entityId = ta.entity || overlayCfg.entity;
+        if (entityId) fireEvent(this, "hass-more-info", { entityId });
+      }
+    } catch (e) {
+      console.warn(`[${CARD_TAG}] overlay tap action failed`, e);
+    }
+  }
+
+  _applyMarkerThemeVars() {
+    const c = this._config;
+    if (!c) return;
+    const bg = colorWithOpacity(c.markerLabelBgColor, c.markerLabelBgOpacity, "rgba(255, 255, 255, .8)");
+    const text = String(c.markerLabelTextColor || "#ff9933");
+    this.style.setProperty("--apa-marker-bg", bg);
+    this.style.setProperty("--apa-marker-text", text);
   }
 
   _updateOverlays() {
@@ -494,11 +633,15 @@ class ApaMenajeraCard extends HTMLElement {
     if (!c || !hass || !ovls) return;
 
     (c.overlays || []).forEach((o, idx) => {
-      const img = ovls.querySelector(`#ovl-${idx}`);
-      if (!img) return;
-      const st = getEntity(hass, o.entity);
-      const active = isActiveState(st, o.state ?? "on");
-      img.style.display = active ? "block" : "none";
+      try {
+        const img = ovls.querySelector(`#ovl-${idx}`);
+        if (!img || !o) return;
+        const st = getEntity(hass, o.entity);
+        const active = matchOverlayCondition(st, o);
+        img.style.display = active ? "block" : "none";
+      } catch (e) {
+        if (c.debug) console.warn(`[${CARD_TAG}] overlay update failed idx=${idx}`, e);
+      }
     });
   }
 
@@ -692,7 +835,9 @@ class ApaMenajeraCard extends HTMLElement {
     if (!hass || !c || !this._els.svg) return;
 
     this._applyBackgroundRules();
-    this._updateOverlays();
+    try { this._updateOverlays(); } catch (e) {
+      if (c.debug) console.warn(`[${CARD_TAG}] overlays update failed`, e);
+    }
 
     if (c.debug) {
       const ids = this._collectEntityIds();
@@ -721,11 +866,11 @@ class ApaMenajeraCard extends HTMLElement {
         const labelEl = g.querySelector(".m-sub");
         const bgEl = g.querySelector(".m-bg");
         if (labelEl && bgEl) {
-          const padX = 12;
+          const padX = 8;
           const padTop = 8;
           const gap = 4;
           const padBottom = 9;
-          const minW = 130;
+          const minW = 100;
           const minH = 50;
 
           let labelW = 0, labelH = 0, valueW = 0, valueH = 0;
@@ -813,6 +958,26 @@ class ApaMenajeraCardEditor extends HTMLElement {
     this._emitConfig(next);
   }
 
+  _onMarkerBgColorChange(ev) {
+    const next = { ...(this._config || {}), marker_label_bg_color: ev.target.value || "#ffffff" };
+    this._config = next;
+    this._emitConfig(next);
+  }
+
+  _onMarkerBgOpacityChange(ev) {
+    const raw = ev.target.value;
+    const n = clamp(Number(raw), 0, 1);
+    const next = { ...(this._config || {}), marker_label_bg_opacity: Number.isFinite(n) ? n : 0.8 };
+    this._config = next;
+    this._emitConfig(next);
+  }
+
+  _onMarkerTextColorChange(ev) {
+    const next = { ...(this._config || {}), marker_label_text_color: ev.target.value || "#ff9933" };
+    this._config = next;
+    this._emitConfig(next);
+  }
+
   _updateMarkers(nextMarkers) {
     const markers = Array.isArray(nextMarkers) ? nextMarkers : [];
     const next = { ...(this._config || {}), markers };
@@ -874,6 +1039,9 @@ class ApaMenajeraCardEditor extends HTMLElement {
     const c = this._config || {};
     const markers = Array.isArray(c.markers) ? c.markers : [];
     const bg = (typeof c.background === "string") ? c.background : "";
+    const markerBgColor = c.marker_label_bg_color || "#ffffff";
+    const markerBgOpacity = Number.isFinite(Number(c.marker_label_bg_opacity)) ? Number(c.marker_label_bg_opacity) : 0.8;
+    const markerTextColor = c.marker_label_text_color || "#ff9933";
 
     const rows = markers.length
       ? markers.map((m, idx) => `
@@ -1035,6 +1203,18 @@ class ApaMenajeraCardEditor extends HTMLElement {
             <label>Imagine fundal (URL)</label>
             <input id="background" type="text" value="${this._escape(bg)}" placeholder="/hacsfiles/apa-menajera-card/card.png" />
           </div>
+          <div class="field">
+            <label>Culoare fundal etichete</label>
+            <input id="marker-bg-color" type="color" value="${this._escape(markerBgColor)}" />
+          </div>
+          <div class="field">
+            <label>Opacitate fundal etichete (0-1)</label>
+            <input id="marker-bg-opacity" type="number" min="0" max="1" step="0.05" value="${String(markerBgOpacity)}" />
+          </div>
+          <div class="field">
+            <label>Culoare text etichete</label>
+            <input id="marker-text-color" type="color" value="${this._escape(markerTextColor)}" />
+          </div>
           <h3>Senzori (Markers)</h3>
           <div class="rows">${rows}</div>
           <div style="margin-top:8px;">
@@ -1046,11 +1226,23 @@ class ApaMenajeraCardEditor extends HTMLElement {
 
     const titleEl = this.shadowRoot.getElementById("title");
     const bgEl = this.shadowRoot.getElementById("background");
+    const markerBgColorEl = this.shadowRoot.getElementById("marker-bg-color");
+    const markerBgOpacityEl = this.shadowRoot.getElementById("marker-bg-opacity");
+    const markerTextColorEl = this.shadowRoot.getElementById("marker-text-color");
     if (titleEl) {
       titleEl.addEventListener("input", (ev) => this._onTitleChange(ev));
     }
     if (bgEl) {
       bgEl.addEventListener("input", (ev) => this._onBackgroundChange(ev));
+    }
+    if (markerBgColorEl) {
+      markerBgColorEl.addEventListener("input", (ev) => this._onMarkerBgColorChange(ev));
+    }
+    if (markerBgOpacityEl) {
+      markerBgOpacityEl.addEventListener("input", (ev) => this._onMarkerBgOpacityChange(ev));
+    }
+    if (markerTextColorEl) {
+      markerTextColorEl.addEventListener("input", (ev) => this._onMarkerTextColorChange(ev));
     }
 
     const addBtn = this.shadowRoot.getElementById("add-marker");
