@@ -5,7 +5,7 @@
  * - SVG markers + animated flows
  * - debug mode: click -> show x,y in background coordinates
  */
-const CARD_VERSION = "1.2.10";
+const CARD_VERSION = "1.2.11";
 const CARD_TAG = "apa-menajera-card";
 const DEFAULT_VIEWBOX = { w: 2048, h: 1365 };
 const DEFAULT_SALT_LEVEL = {
@@ -1606,13 +1606,13 @@ class ApaMenajeraCardEditor extends HTMLElement {
       bgEl.addEventListener("change", (ev) => this._onBackgroundChange(ev));
     }
     if (markerBgColorEl) {
-      markerBgColorEl.addEventListener("input", (ev) => this._onMarkerBgColorChange(ev));
+      markerBgColorEl.addEventListener("change", (ev) => this._onMarkerBgColorChange(ev));
     }
     if (markerBgOpacityEl) {
       markerBgOpacityEl.addEventListener("change", (ev) => this._onMarkerBgOpacityChange(ev));
     }
     if (markerTextColorEl) {
-      markerTextColorEl.addEventListener("input", (ev) => this._onMarkerTextColorChange(ev));
+      markerTextColorEl.addEventListener("change", (ev) => this._onMarkerTextColorChange(ev));
     }
     if (saltEntityEl) {
       saltEntityEl.addEventListener("change", (ev) => this._onSaltFieldChange("entity", ev.target.value));
