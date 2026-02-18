@@ -5,7 +5,7 @@
  * - SVG markers + animated flows
  * - debug mode: click -> show x,y in background coordinates
  */
-const CARD_VERSION = "1.2.8";
+const CARD_VERSION = "1.2.9";
 const CARD_TAG = "apa-menajera-card";
 const DEFAULT_VIEWBOX = { w: 2048, h: 1365 };
 const DEFAULT_SALT_LEVEL = {
@@ -15,7 +15,7 @@ const DEFAULT_SALT_LEVEL = {
   h: 420,
   low_threshold: 20,
   label: "",
-  show_value: false,
+  show_value: true,
 };
 
 function fireEvent(node, type, detail = {}, options = {}) {
@@ -99,9 +99,19 @@ function numState(stateObj) {
 }
 
 function percentFromState(stateObj) {
-  const n = numState(stateObj);
-  if (n == null) return null;
-  return clamp(n, 0, 100);
+  if (!stateObj) return null;
+  const raw = String(stateObj.state ?? "").trim();
+  if (!raw || raw === "unknown" || raw === "unavailable") return null;
+
+  const direct = Number(raw);
+  if (Number.isFinite(direct)) return clamp(direct, 0, 100);
+
+  const normalized = raw.replace(",", ".");
+  const m = normalized.match(/-?\d+(\.\d+)?/);
+  if (!m) return null;
+  const parsed = Number(m[0]);
+  if (!Number.isFinite(parsed)) return null;
+  return clamp(parsed, 0, 100);
 }
 
 function inferSaltEntity(markers) {
@@ -1217,6 +1227,45 @@ class ApaMenajeraCardEditor extends HTMLElement {
     this._emitConfig(next);
   }
 
+  _onSaltFieldChange(field, rawValue) {
+    const next = { ...(this._config || {}) };
+    const salt = (next.salt_level && typeof next.salt_level === "object")
+      ? { ...DEFAULT_SALT_LEVEL, ...next.salt_level }
+      : { ...DEFAULT_SALT_LEVEL };
+
+    if (field === "show_value") {
+      salt.show_value = !!rawValue;
+    } else if (field === "entity" || field === "label") {
+      const val = String(rawValue ?? "");
+      if (val.trim() === "") {
+        if (field === "entity") {
+          delete next.salt_level;
+          this._config = next;
+          this._emitConfig(next);
+          return;
+        }
+        salt[field] = "";
+      } else {
+        salt[field] = val;
+      }
+    } else if (field === "x" || field === "y" || field === "w" || field === "h" || field === "low_threshold") {
+      const val = String(rawValue ?? "").trim();
+      if (!val) {
+        delete salt[field];
+      } else {
+        const n = Number(val);
+        if (!Number.isFinite(n)) return;
+        salt[field] = n;
+      }
+    } else {
+      return;
+    }
+
+    next.salt_level = salt;
+    this._config = next;
+    this._emitConfig(next);
+  }
+
   _updateMarkers(nextMarkers) {
     const markers = Array.isArray(nextMarkers) ? nextMarkers : [];
     const next = { ...(this._config || {}), markers };
@@ -1281,6 +1330,9 @@ class ApaMenajeraCardEditor extends HTMLElement {
     const markerBgColor = c.marker_label_bg_color || "#ffffff";
     const markerBgOpacity = Number.isFinite(Number(c.marker_label_bg_opacity)) ? Number(c.marker_label_bg_opacity) : 0.8;
     const markerTextColor = c.marker_label_text_color || "#ff9933";
+    const salt = (c.salt_level && typeof c.salt_level === "object")
+      ? { ...DEFAULT_SALT_LEVEL, ...c.salt_level }
+      : { ...DEFAULT_SALT_LEVEL };
 
     const rows = markers.length
       ? markers.map((m, idx) => `
@@ -1362,6 +1414,21 @@ class ApaMenajeraCardEditor extends HTMLElement {
           color: inherit;
           font-size: 13px;
         }
+        input[type="checkbox"] {
+          width: auto;
+          padding: 0;
+        }
+        .inline-check {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          font-size: 12px;
+        }
+        .salt-grid {
+          display: grid;
+          grid-template-columns: 1fr 1fr 1fr;
+          gap: 8px;
+        }
         .btn {
           padding: 8px 10px;
           border-radius: 8px;
@@ -1429,6 +1496,7 @@ class ApaMenajeraCardEditor extends HTMLElement {
         }
         @media (max-width: 620px) {
           .grid { grid-template-columns: 1fr 1fr; }
+          .salt-grid { grid-template-columns: 1fr 1fr; }
         }
       </style>
       <div class="wrap">
@@ -1454,6 +1522,29 @@ class ApaMenajeraCardEditor extends HTMLElement {
             <label>Culoare text etichete</label>
             <input id="marker-text-color" type="color" value="${this._escape(markerTextColor)}" />
           </div>
+          <h3>Nivel Sare (bara AMA)</h3>
+          <div class="field">
+            <label>Senzor nivel sare</label>
+            <input id="salt-entity" type="text" value="${this._escape(salt.entity || "")}" placeholder="sensor.ama_nivel_sare" />
+          </div>
+          <div class="field">
+            <label>Eticheta (optional)</label>
+            <input id="salt-label" type="text" value="${this._escape(salt.label || "")}" placeholder="Sare" />
+          </div>
+          <div class="field">
+            <div class="salt-grid">
+              <input id="salt-x" type="number" step="1" value="${String(salt.x)}" placeholder="x" />
+              <input id="salt-y" type="number" step="1" value="${String(salt.y)}" placeholder="y" />
+              <input id="salt-threshold" type="number" step="1" min="0" max="100" value="${String(salt.low_threshold)}" placeholder="prag rosu %" />
+            </div>
+          </div>
+          <div class="field">
+            <div class="salt-grid">
+              <input id="salt-w" type="number" step="1" min="6" value="${String(salt.w)}" placeholder="latime" />
+              <input id="salt-h" type="number" step="1" min="30" value="${String(salt.h)}" placeholder="inaltime" />
+              <label class="inline-check"><input id="salt-show-value" type="checkbox" ${salt.show_value === false ? "" : "checked"} />Afiseaza %</label>
+            </div>
+          </div>
           <h3>Senzori (Markers)</h3>
           <div class="rows">${rows}</div>
           <div style="margin-top:8px;">
@@ -1468,6 +1559,14 @@ class ApaMenajeraCardEditor extends HTMLElement {
     const markerBgColorEl = this.shadowRoot.getElementById("marker-bg-color");
     const markerBgOpacityEl = this.shadowRoot.getElementById("marker-bg-opacity");
     const markerTextColorEl = this.shadowRoot.getElementById("marker-text-color");
+    const saltEntityEl = this.shadowRoot.getElementById("salt-entity");
+    const saltLabelEl = this.shadowRoot.getElementById("salt-label");
+    const saltXEl = this.shadowRoot.getElementById("salt-x");
+    const saltYEl = this.shadowRoot.getElementById("salt-y");
+    const saltWEl = this.shadowRoot.getElementById("salt-w");
+    const saltHEl = this.shadowRoot.getElementById("salt-h");
+    const saltThresholdEl = this.shadowRoot.getElementById("salt-threshold");
+    const saltShowValueEl = this.shadowRoot.getElementById("salt-show-value");
     if (titleEl) {
       titleEl.addEventListener("input", (ev) => this._onTitleChange(ev));
     }
@@ -1482,6 +1581,30 @@ class ApaMenajeraCardEditor extends HTMLElement {
     }
     if (markerTextColorEl) {
       markerTextColorEl.addEventListener("input", (ev) => this._onMarkerTextColorChange(ev));
+    }
+    if (saltEntityEl) {
+      saltEntityEl.addEventListener("input", (ev) => this._onSaltFieldChange("entity", ev.target.value));
+    }
+    if (saltLabelEl) {
+      saltLabelEl.addEventListener("input", (ev) => this._onSaltFieldChange("label", ev.target.value));
+    }
+    if (saltXEl) {
+      saltXEl.addEventListener("input", (ev) => this._onSaltFieldChange("x", ev.target.value));
+    }
+    if (saltYEl) {
+      saltYEl.addEventListener("input", (ev) => this._onSaltFieldChange("y", ev.target.value));
+    }
+    if (saltWEl) {
+      saltWEl.addEventListener("input", (ev) => this._onSaltFieldChange("w", ev.target.value));
+    }
+    if (saltHEl) {
+      saltHEl.addEventListener("input", (ev) => this._onSaltFieldChange("h", ev.target.value));
+    }
+    if (saltThresholdEl) {
+      saltThresholdEl.addEventListener("input", (ev) => this._onSaltFieldChange("low_threshold", ev.target.value));
+    }
+    if (saltShowValueEl) {
+      saltShowValueEl.addEventListener("change", (ev) => this._onSaltFieldChange("show_value", ev.target.checked));
     }
 
     const addBtn = this.shadowRoot.getElementById("add-marker");
