@@ -1323,7 +1323,39 @@ class ApaMenajeraCardEditor extends HTMLElement {
     this._render();
   }
 
+  _captureFocusState() {
+    const root = this.shadowRoot;
+    if (!root) return null;
+    const el = root.activeElement;
+    if (!el || !el.id) return null;
+    const tag = String(el.tagName || "").toLowerCase();
+    const type = String(el.type || "").toLowerCase();
+    const isTextLikeInput = tag === "input" && type !== "checkbox";
+    return {
+      id: el.id,
+      start: isTextLikeInput ? el.selectionStart : null,
+      end: isTextLikeInput ? el.selectionEnd : null,
+    };
+  }
+
+  _restoreFocusState(state) {
+    if (!state || !state.id || !this.shadowRoot) return;
+    const el = this.shadowRoot.getElementById(state.id);
+    if (!el || typeof el.focus !== "function") return;
+    try { el.focus({ preventScroll: true }); } catch (e) { el.focus(); }
+    const type = String(el.type || "").toLowerCase();
+    if (type === "number") return;
+    if (
+      Number.isInteger(state.start) &&
+      Number.isInteger(state.end) &&
+      typeof el.setSelectionRange === "function"
+    ) {
+      try { el.setSelectionRange(state.start, state.end); } catch (e) {}
+    }
+  }
+
   _render() {
+    const focusState = this._captureFocusState();
     const c = this._config || {};
     const markers = Array.isArray(c.markers) ? c.markers : [];
     const bg = (typeof c.background === "string") ? c.background : "";
@@ -1627,6 +1659,10 @@ class ApaMenajeraCardEditor extends HTMLElement {
       const idx = Number(el.getAttribute("data-toggle-idx"));
       el.addEventListener("click", () => this._toggleMarker(idx));
     });
+
+    if (focusState) {
+      requestAnimationFrame(() => this._restoreFocusState(focusState));
+    }
   }
 
   _escape(s) {
