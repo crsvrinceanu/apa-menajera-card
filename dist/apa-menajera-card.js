@@ -5,7 +5,7 @@
  * - SVG markers + animated flows
  * - debug mode: click -> show x,y in background coordinates
  */
-const CARD_VERSION = "1.2.9";
+const CARD_VERSION = "1.2.10";
 const CARD_TAG = "apa-menajera-card";
 const DEFAULT_VIEWBOX = { w: 2048, h: 1365 };
 const DEFAULT_SALT_LEVEL = {
@@ -1600,40 +1600,40 @@ class ApaMenajeraCardEditor extends HTMLElement {
     const saltThresholdEl = this.shadowRoot.getElementById("salt-threshold");
     const saltShowValueEl = this.shadowRoot.getElementById("salt-show-value");
     if (titleEl) {
-      titleEl.addEventListener("input", (ev) => this._onTitleChange(ev));
+      titleEl.addEventListener("change", (ev) => this._onTitleChange(ev));
     }
     if (bgEl) {
-      bgEl.addEventListener("input", (ev) => this._onBackgroundChange(ev));
+      bgEl.addEventListener("change", (ev) => this._onBackgroundChange(ev));
     }
     if (markerBgColorEl) {
       markerBgColorEl.addEventListener("input", (ev) => this._onMarkerBgColorChange(ev));
     }
     if (markerBgOpacityEl) {
-      markerBgOpacityEl.addEventListener("input", (ev) => this._onMarkerBgOpacityChange(ev));
+      markerBgOpacityEl.addEventListener("change", (ev) => this._onMarkerBgOpacityChange(ev));
     }
     if (markerTextColorEl) {
       markerTextColorEl.addEventListener("input", (ev) => this._onMarkerTextColorChange(ev));
     }
     if (saltEntityEl) {
-      saltEntityEl.addEventListener("input", (ev) => this._onSaltFieldChange("entity", ev.target.value));
+      saltEntityEl.addEventListener("change", (ev) => this._onSaltFieldChange("entity", ev.target.value));
     }
     if (saltLabelEl) {
-      saltLabelEl.addEventListener("input", (ev) => this._onSaltFieldChange("label", ev.target.value));
+      saltLabelEl.addEventListener("change", (ev) => this._onSaltFieldChange("label", ev.target.value));
     }
     if (saltXEl) {
-      saltXEl.addEventListener("input", (ev) => this._onSaltFieldChange("x", ev.target.value));
+      saltXEl.addEventListener("change", (ev) => this._onSaltFieldChange("x", ev.target.value));
     }
     if (saltYEl) {
-      saltYEl.addEventListener("input", (ev) => this._onSaltFieldChange("y", ev.target.value));
+      saltYEl.addEventListener("change", (ev) => this._onSaltFieldChange("y", ev.target.value));
     }
     if (saltWEl) {
-      saltWEl.addEventListener("input", (ev) => this._onSaltFieldChange("w", ev.target.value));
+      saltWEl.addEventListener("change", (ev) => this._onSaltFieldChange("w", ev.target.value));
     }
     if (saltHEl) {
-      saltHEl.addEventListener("input", (ev) => this._onSaltFieldChange("h", ev.target.value));
+      saltHEl.addEventListener("change", (ev) => this._onSaltFieldChange("h", ev.target.value));
     }
     if (saltThresholdEl) {
-      saltThresholdEl.addEventListener("input", (ev) => this._onSaltFieldChange("low_threshold", ev.target.value));
+      saltThresholdEl.addEventListener("change", (ev) => this._onSaltFieldChange("low_threshold", ev.target.value));
     }
     if (saltShowValueEl) {
       saltShowValueEl.addEventListener("change", (ev) => this._onSaltFieldChange("show_value", ev.target.checked));
@@ -1647,7 +1647,7 @@ class ApaMenajeraCardEditor extends HTMLElement {
     this.shadowRoot.querySelectorAll("input[data-marker-idx]").forEach((el) => {
       const idx = Number(el.getAttribute("data-marker-idx"));
       const field = el.getAttribute("data-field");
-      el.addEventListener("input", (ev) => this._onMarkerFieldChange(idx, field, ev.target.value));
+      el.addEventListener("change", (ev) => this._onMarkerFieldChange(idx, field, ev.target.value));
     });
 
     this.shadowRoot.querySelectorAll("button[data-remove-idx]").forEach((el) => {
