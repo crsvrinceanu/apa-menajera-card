@@ -8,6 +8,15 @@
 const CARD_VERSION = "1.2.8";
 const CARD_TAG = "apa-menajera-card";
 const DEFAULT_VIEWBOX = { w: 2048, h: 1365 };
+const DEFAULT_SALT_LEVEL = {
+  x: 1310,
+  y: 790,
+  w: 26,
+  h: 420,
+  low_threshold: 20,
+  label: "",
+  show_value: false,
+};
 
 function fireEvent(node, type, detail = {}, options = {}) {
   const event = new Event(type, {
@@ -89,6 +98,22 @@ function numState(stateObj) {
   return Number.isFinite(n) ? n : null;
 }
 
+function percentFromState(stateObj) {
+  const n = numState(stateObj);
+  if (n == null) return null;
+  return clamp(n, 0, 100);
+}
+
+function inferSaltEntity(markers) {
+  const arr = Array.isArray(markers) ? markers : [];
+  const hasSalt = (v) => {
+    const t = norm(v);
+    return t.includes("sare") || t.includes("salt");
+  };
+  const found = arr.find((m) => hasSalt(m?.label) || hasSalt(m?.entity));
+  return found?.entity || null;
+}
+
 function matchOverlayCondition(stateObj, cfg) {
   if (!stateObj || !cfg) return false;
 
@@ -120,7 +145,7 @@ class ApaMenajeraCard extends HTMLElement {
     this._markersUsed = [];
     this._last = { markerText: new Map(), activeFlows: new Map(), bgSrc: null };
     this._warmup = { timer: null, startedAt: 0 };
-    this._refs = { markerValueEls: [], markerGroups: [], markerEntityIds: [], flowEls: new Map() };
+    this._refs = { markerValueEls: [], markerGroups: [], markerEntityIds: [], flowEls: new Map(), saltLevel: null };
   }
 
   static getStubConfig() {
@@ -137,6 +162,7 @@ class ApaMenajeraCard extends HTMLElement {
       marker_label_bg_color: "#ffffff",
       marker_label_bg_opacity: 0.8,
       marker_label_text_color: "#ff9933",
+      salt_level: null,
       filter_reset_entity: "input_number.filtru_zile_ramase",
       filter_reset_value: 30,
       filter_reset_button: true,
@@ -150,6 +176,7 @@ class ApaMenajeraCard extends HTMLElement {
 
   setConfig(config) {
     if (!config) throw new Error("Config invalid");
+    const markers = Array.isArray(config.markers) ? config.markers : [];
 
     // background can be string or object { default, when:[{entity,state,image}] }
     let bgDefault = "/hacsfiles/apa-menajera-card/card.png";
@@ -161,6 +188,12 @@ class ApaMenajeraCard extends HTMLElement {
       bgWhen = Array.isArray(config.background.when) ? config.background.when : [];
     }
 
+    const rawSalt = (config.salt_level && typeof config.salt_level === "object") ? config.salt_level : {};
+    const inferredSaltEntity = rawSalt.entity || inferSaltEntity(markers);
+    const saltLevel = inferredSaltEntity
+      ? { ...DEFAULT_SALT_LEVEL, ...rawSalt, entity: inferredSaltEntity }
+      : null;
+
     this._config = {
       title: config.title ?? "",
       backgroundDefault: bgDefault,
@@ -169,7 +202,7 @@ class ApaMenajeraCard extends HTMLElement {
       overlays: Array.isArray(config.overlays) ? config.overlays : [],
 
       entities: config.entities ?? {},
-      markers: Array.isArray(config.markers) ? config.markers : [],
+      markers,
       flows: Array.isArray(config.flows) ? config.flows : [],
       debug: !!config.debug,
       viewbox: config.viewbox ?? DEFAULT_VIEWBOX,
@@ -181,6 +214,7 @@ class ApaMenajeraCard extends HTMLElement {
       markerLabelBgColor: config.marker_label_bg_color ?? "#ffffff",
       markerLabelBgOpacity: Number.isFinite(Number(config.marker_label_bg_opacity)) ? Number(config.marker_label_bg_opacity) : 0.8,
       markerLabelTextColor: config.marker_label_text_color ?? "#ff9933",
+      saltLevel,
       filterResetEntity: config.filter_reset_entity ?? "input_number.filtru_zile_ramase",
       filterResetValue: Number.isFinite(Number(config.filter_reset_value)) ? Number(config.filter_reset_value) : 30,
       filterResetButton: config.filter_reset_button !== false,
@@ -282,6 +316,7 @@ class ApaMenajeraCard extends HTMLElement {
     });
 
     (c.flows || []).forEach((f) => add(f.entity));
+    add(c.saltLevel?.entity);
     (c.backgroundWhen || []).forEach((r) => add(r.entity));
     (c.overlays || []).forEach((o) => add(o.entity));
 
@@ -485,6 +520,24 @@ class ApaMenajeraCard extends HTMLElement {
         }
         .m-sub { font-size:15px; fill: var(--apa-marker-text, #ff9933); font-weight:550; text-anchor: middle; }
         .m-value { font-size:18px; fill: var(--apa-marker-text, #ff9933); font-weight:730; text-anchor: middle; }
+
+        .salt-level { pointer-events:auto; cursor:pointer; }
+        .salt-track {
+          fill: rgba(255,255,255,.14);
+          stroke: rgba(255,255,255,.50);
+          stroke-width: 1.4;
+        }
+        .salt-fill {
+          stroke: rgba(255,255,255,.68);
+          stroke-width: .8;
+          transition: y .25s ease, height .25s ease, fill .25s ease;
+        }
+        .salt-value {
+          font-size: 12px;
+          fill: rgba(255,255,255,.90);
+          font-weight: 700;
+          text-anchor: middle;
+        }
 
         /* Debug */
         .dbg { pointer-events:auto; }
@@ -741,6 +794,7 @@ class ApaMenajeraCard extends HTMLElement {
       this._refs.markerGroups = [];
       this._refs.markerEntityIds = [];
       this._refs.flowEls = new Map();
+      this._refs.saltLevel = null;
     }
 
     const gFlows = document.createElementNS("http://www.w3.org/2000/svg", "g");
@@ -818,6 +872,60 @@ class ApaMenajeraCard extends HTMLElement {
         fireEvent(this, "hass-more-info", { entityId: m.entity });
       });
     });
+
+    const saltCfg = this._config?.saltLevel;
+    if (saltCfg && saltCfg.entity && typeof saltCfg.x === "number" && typeof saltCfg.y === "number") {
+      const gSalt = document.createElementNS("http://www.w3.org/2000/svg", "g");
+      gSalt.setAttribute("class", "salt-level");
+      gSalt.dataset.entity = saltCfg.entity;
+
+      const w = Math.max(6, Number(saltCfg.w));
+      const h = Math.max(30, Number(saltCfg.h));
+      const x = Number(saltCfg.x);
+      const y = Number(saltCfg.y);
+      const r = Math.max(2, Math.min(8, Math.round(w * 0.22)));
+
+      const track = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+      track.setAttribute("class", "salt-track");
+      track.setAttribute("x", String(x));
+      track.setAttribute("y", String(y));
+      track.setAttribute("width", String(w));
+      track.setAttribute("height", String(h));
+      track.setAttribute("rx", String(r));
+      track.setAttribute("ry", String(r));
+      gSalt.appendChild(track);
+
+      const fill = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+      fill.setAttribute("class", "salt-fill");
+      fill.setAttribute("x", String(x + 1));
+      fill.setAttribute("y", String(y + h - 2));
+      fill.setAttribute("width", String(Math.max(2, w - 2)));
+      fill.setAttribute("height", "1");
+      fill.setAttribute("rx", String(Math.max(1, r - 1)));
+      fill.setAttribute("ry", String(Math.max(1, r - 1)));
+      fill.setAttribute("fill", "#7a7a7a");
+      gSalt.appendChild(fill);
+
+      const tVal = document.createElementNS("http://www.w3.org/2000/svg", "text");
+      tVal.setAttribute("class", "salt-value");
+      tVal.setAttribute("x", String(x + (w / 2)));
+      tVal.setAttribute("y", String(y + h + 14));
+      tVal.textContent = "";
+      gSalt.appendChild(tVal);
+
+      gSalt.addEventListener("click", (ev) => {
+        ev.preventDefault();
+        ev.stopPropagation();
+        if (saltCfg.tap_action) {
+          this._handleTapAction(saltCfg.tap_action, saltCfg.entity);
+          return;
+        }
+        fireEvent(this, "hass-more-info", { entityId: saltCfg.entity });
+      });
+
+      this._refs.saltLevel = { cfg: saltCfg, fillEl: fill, valueEl: tVal };
+      gMarkers.appendChild(gSalt);
+    }
   }
 
   _wireDebug() {
@@ -915,6 +1023,17 @@ class ApaMenajeraCard extends HTMLElement {
     return false;
   }
 
+  _saltColor(percent, lowThreshold = 20) {
+    const p = clamp(Number(percent), 0, 100);
+    const low = clamp(Number(lowThreshold), 0, 100);
+    if (p <= low) return "#ff2d2d";
+    const t = (p - low) / Math.max(1, (100 - low));
+    const r = Math.round(255 - (95 * t));
+    const g = Math.round(45 + (180 * t));
+    const b = Math.round(45 + (35 * t));
+    return `rgb(${r}, ${g}, ${b})`;
+  }
+
   _update() {
     const hass = this._hass;
     const c = this._config;
@@ -1003,6 +1122,39 @@ class ApaMenajeraCard extends HTMLElement {
       p.classList.toggle("animated", f.animated !== false);
       this._last.activeFlows.set(f.id, active);
     });
+
+    const saltRef = this._refs?.saltLevel;
+    if (saltRef?.cfg && saltRef.fillEl) {
+      const st = getEntity(hass, saltRef.cfg.entity);
+      const pct = percentFromState(st);
+      const w = Math.max(6, Number(saltRef.cfg.w));
+      const h = Math.max(30, Number(saltRef.cfg.h));
+      const x = Number(saltRef.cfg.x);
+      const y = Number(saltRef.cfg.y);
+      const low = Number.isFinite(Number(saltRef.cfg.low_threshold)) ? Number(saltRef.cfg.low_threshold) : 20;
+
+      if (pct == null) {
+        saltRef.fillEl.setAttribute("x", String(x + 1));
+        saltRef.fillEl.setAttribute("y", String(y + h - 2));
+        saltRef.fillEl.setAttribute("width", String(Math.max(2, w - 2)));
+        saltRef.fillEl.setAttribute("height", "1");
+        saltRef.fillEl.setAttribute("fill", "#7a7a7a");
+        if (saltRef.valueEl) saltRef.valueEl.textContent = "";
+      } else {
+        const innerH = Math.max(2, h - 2);
+        const innerW = Math.max(2, w - 2);
+        const fillH = Math.max(1, Math.round((pct / 100) * innerH));
+        const fillY = y + 1 + (innerH - fillH);
+        saltRef.fillEl.setAttribute("x", String(x + 1));
+        saltRef.fillEl.setAttribute("y", String(fillY));
+        saltRef.fillEl.setAttribute("width", String(innerW));
+        saltRef.fillEl.setAttribute("height", String(fillH));
+        saltRef.fillEl.setAttribute("fill", this._saltColor(pct, low));
+        if (saltRef.valueEl) {
+          saltRef.valueEl.textContent = (saltRef.cfg.show_value === false) ? "" : `${Math.round(pct)}%`;
+        }
+      }
+    }
   }
 }
 
@@ -1370,4 +1522,3 @@ window.customCards.push({
 });
 
 console.info(`[${CARD_TAG}] loaded v${CARD_VERSION}`);
-
