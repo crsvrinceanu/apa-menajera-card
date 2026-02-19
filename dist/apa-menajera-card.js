@@ -1185,8 +1185,45 @@ class ApaMenajeraCardEditor extends HTMLElement {
     this._render();
   }
 
+  _getNormalizedSaltConfig(rawConfig) {
+    const cfg = (rawConfig && typeof rawConfig === "object") ? rawConfig : {};
+    const sourceSalt = (cfg.salt_level && typeof cfg.salt_level === "object")
+      ? cfg.salt_level
+      : ((cfg.saltLevel && typeof cfg.saltLevel === "object") ? cfg.saltLevel : {});
+
+    const salt = { ...DEFAULT_SALT_LEVEL, ...sourceSalt };
+    if (salt.low_threshold == null && sourceSalt.threshold != null) {
+      salt.low_threshold = sourceSalt.threshold;
+    }
+
+    const numericFields = ["x", "y", "w", "h", "low_threshold"];
+    numericFields.forEach((field) => {
+      const n = Number(salt[field]);
+      salt[field] = Number.isFinite(n) ? n : DEFAULT_SALT_LEVEL[field];
+    });
+
+    salt.entity = String(salt.entity ?? "").trim();
+    salt.label = String(salt.label ?? "");
+    salt.show_value = salt.show_value === false ? false : true;
+    return salt;
+  }
+
   _emitConfig(config) {
-    fireEvent(this, "config-changed", { config });
+    const next = (config && typeof config === "object") ? { ...config } : {};
+    const legacySalt = (next.saltLevel && typeof next.saltLevel === "object") ? next.saltLevel : null;
+    const currentSalt = (next.salt_level && typeof next.salt_level === "object") ? next.salt_level : null;
+    const sourceSalt = currentSalt || legacySalt;
+
+    if (sourceSalt) {
+      const normalized = { ...sourceSalt };
+      if (normalized.low_threshold == null && normalized.threshold != null) {
+        normalized.low_threshold = normalized.threshold;
+      }
+      delete normalized.threshold;
+      next.salt_level = normalized;
+    }
+    delete next.saltLevel;
+    fireEvent(this, "config-changed", { config: next });
   }
 
   _onTitleChange(ev) {
@@ -1229,9 +1266,7 @@ class ApaMenajeraCardEditor extends HTMLElement {
 
   _onSaltFieldChange(field, rawValue) {
     const next = { ...(this._config || {}) };
-    const salt = (next.salt_level && typeof next.salt_level === "object")
-      ? { ...DEFAULT_SALT_LEVEL, ...next.salt_level }
-      : { ...DEFAULT_SALT_LEVEL };
+    const salt = this._getNormalizedSaltConfig(next);
 
     if (field === "show_value") {
       salt.show_value = !!rawValue;
@@ -1240,6 +1275,7 @@ class ApaMenajeraCardEditor extends HTMLElement {
       if (val.trim() === "") {
         if (field === "entity") {
           delete next.salt_level;
+          delete next.saltLevel;
           this._config = next;
           this._emitConfig(next);
           return;
@@ -1262,6 +1298,7 @@ class ApaMenajeraCardEditor extends HTMLElement {
     }
 
     next.salt_level = salt;
+    delete next.saltLevel;
     this._config = next;
     this._emitConfig(next);
   }
@@ -1362,9 +1399,7 @@ class ApaMenajeraCardEditor extends HTMLElement {
     const markerBgColor = c.marker_label_bg_color || "#ffffff";
     const markerBgOpacity = Number.isFinite(Number(c.marker_label_bg_opacity)) ? Number(c.marker_label_bg_opacity) : 0.8;
     const markerTextColor = c.marker_label_text_color || "#ff9933";
-    const salt = (c.salt_level && typeof c.salt_level === "object")
-      ? { ...DEFAULT_SALT_LEVEL, ...c.salt_level }
-      : { ...DEFAULT_SALT_LEVEL };
+    const salt = this._getNormalizedSaltConfig(c);
 
     const rows = markers.length
       ? markers.map((m, idx) => `
