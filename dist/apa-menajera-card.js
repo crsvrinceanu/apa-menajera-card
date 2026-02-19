@@ -8,6 +8,7 @@
 const CARD_VERSION = "1.2.11";
 const CARD_TAG = "apa-menajera-card";
 const DEFAULT_VIEWBOX = { w: 2048, h: 1365 };
+const FLOOD_ALERT_ENTITY = "input_boolean.inundatie";
 const DEFAULT_SALT_LEVEL = {
   x: 1310,
   y: 790,
@@ -156,6 +157,7 @@ class ApaMenajeraCard extends HTMLElement {
     this._last = { markerText: new Map(), activeFlows: new Map(), bgSrc: null };
     this._warmup = { timer: null, startedAt: 0 };
     this._refs = { markerValueEls: [], markerGroups: [], markerEntityIds: [], flowEls: new Map(), saltLevel: null };
+    this._floodPrevOn = null;
   }
 
   static getStubConfig() {
@@ -329,6 +331,7 @@ class ApaMenajeraCard extends HTMLElement {
     add(c.saltLevel?.entity);
     (c.backgroundWhen || []).forEach((r) => add(r.entity));
     (c.overlays || []).forEach((o) => add(o.entity));
+    add(FLOOD_ALERT_ENTITY);
 
     // remove empties
     return [...ids].filter(Boolean);
@@ -446,6 +449,51 @@ class ApaMenajeraCard extends HTMLElement {
           box-shadow: 0 0 12px rgba(95, 185, 255, .55);
         }
         .fab-reset[hidden] { display: none; }
+        .flood-backdrop {
+          position: absolute;
+          inset: 0;
+          z-index: 20;
+          display: none;
+          align-items: center;
+          justify-content: center;
+          background: rgba(255, 0, 0, 0.20);
+          pointer-events: auto;
+        }
+        .flood-backdrop.visible {
+          display: flex;
+        }
+        .flood-dialog {
+          width: min(92%, 500px);
+          border-radius: 14px;
+          border: 2px solid #ff1a1a;
+          background: rgba(0, 0, 0, 0.88);
+          box-shadow: 0 0 8px rgba(255, 40, 40, 0.95), 0 0 20px rgba(255, 0, 0, 0.85);
+          color: #ff3b3b;
+          padding: 18px 18px 14px;
+          text-align: center;
+          position: relative;
+        }
+        .flood-title {
+          margin: 0;
+          font-size: 20px;
+          font-weight: 800;
+          letter-spacing: 0.3px;
+          text-shadow: 0 0 6px rgba(255, 40, 40, 0.9), 0 0 14px rgba(255, 0, 0, 0.75);
+        }
+        .flood-close {
+          margin-top: 12px;
+          border: 1px solid rgba(255, 70, 70, .9);
+          background: rgba(255, 0, 0, 0.18);
+          color: #ff6b6b;
+          border-radius: 9px;
+          font-size: 12px;
+          font-weight: 700;
+          padding: 6px 12px;
+          cursor: pointer;
+        }
+        .flood-close:hover {
+          background: rgba(255, 0, 0, 0.28);
+        }
         .wrap {
           position: relative;
           width: 100%;
@@ -566,6 +614,12 @@ class ApaMenajeraCard extends HTMLElement {
           <div id="ovls"></div>
           <svg class="overlay" id="svg" viewBox="0 0 ${vb.w} ${vb.h}" preserveAspectRatio="xMidYMid meet"></svg>
           <button class="fab-reset" id="fab-reset" type="button" title="Reset filtru">RESET</button>
+          <div class="flood-backdrop" id="flood-backdrop" aria-live="assertive" role="alertdialog">
+            <div class="flood-dialog">
+              <p class="flood-title">Inundatie detectata.</p>
+              <button class="flood-close" id="flood-close" type="button">Inchide</button>
+            </div>
+          </div>
         </div>
       </ha-card>
     `;
@@ -575,8 +629,11 @@ class ApaMenajeraCard extends HTMLElement {
     this._els.ovls = this.shadowRoot.getElementById("ovls");
     this._els.svg = this.shadowRoot.getElementById("svg");
     this._els.fabReset = this.shadowRoot.getElementById("fab-reset");
+    this._els.floodBackdrop = this.shadowRoot.getElementById("flood-backdrop");
+    this._els.floodClose = this.shadowRoot.getElementById("flood-close");
     this._applyMarkerThemeVars();
     this._wireResetButton();
+    this._wireFloodDialog();
 
     // constrain width on desktop
     const haCard = this.shadowRoot.querySelector("ha-card");
@@ -604,6 +661,50 @@ class ApaMenajeraCard extends HTMLElement {
     if (this._hass) this._update();
     this._kickUpdate();
     this._startWarmup();
+  }
+
+  _wireFloodDialog() {
+    if (this._els.floodClose) {
+      this._els.floodClose.addEventListener("click", (ev) => {
+        ev.preventDefault();
+        this._hideFloodDialog();
+      });
+    }
+    if (this._els.floodBackdrop) {
+      this._els.floodBackdrop.addEventListener("click", (ev) => {
+        if (ev.target === this._els.floodBackdrop) this._hideFloodDialog();
+      });
+    }
+  }
+
+  _showFloodDialog() {
+    if (this._els.floodBackdrop) this._els.floodBackdrop.classList.add("visible");
+  }
+
+  _hideFloodDialog() {
+    if (this._els.floodBackdrop) this._els.floodBackdrop.classList.remove("visible");
+  }
+
+  _updateFloodDialog() {
+    const st = getEntity(this._hass, FLOOD_ALERT_ENTITY);
+    const isOn = isActiveState(st, "on");
+
+    if (this._floodPrevOn === null) {
+      this._floodPrevOn = isOn;
+      if (!isOn) this._hideFloodDialog();
+      return;
+    }
+
+    if (!isOn) {
+      this._hideFloodDialog();
+      this._floodPrevOn = false;
+      return;
+    }
+
+    if (!this._floodPrevOn && isOn) {
+      this._showFloodDialog();
+    }
+    this._floodPrevOn = true;
   }
 
   _renderOverlays() {
@@ -1054,6 +1155,7 @@ class ApaMenajeraCard extends HTMLElement {
       if (c.debug) console.warn(`[${CARD_TAG}] overlays update failed`, e);
     }
     this._updateResetButtonVisibility();
+    this._updateFloodDialog();
 
     if (c.debug) {
       const ids = this._collectEntityIds();
