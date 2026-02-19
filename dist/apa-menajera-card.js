@@ -1174,6 +1174,7 @@ class ApaMenajeraCardEditor extends HTMLElement {
     this.attachShadow({ mode: "open" });
     this._config = {};
     this._openMarkerIdx = -1;
+    this._openSalt = false;
   }
 
   setConfig(config) {
@@ -1360,6 +1361,11 @@ class ApaMenajeraCardEditor extends HTMLElement {
     this._render();
   }
 
+  _toggleSalt() {
+    this._openSalt = !this._openSalt;
+    this._render();
+  }
+
   _captureFocusState() {
     const root = this.shadowRoot;
     if (!root) return null;
@@ -1400,6 +1406,7 @@ class ApaMenajeraCardEditor extends HTMLElement {
     const markerBgOpacity = Number.isFinite(Number(c.marker_label_bg_opacity)) ? Number(c.marker_label_bg_opacity) : 0.8;
     const markerTextColor = c.marker_label_text_color || "#ff9933";
     const salt = this._getNormalizedSaltConfig(c);
+    const saltSummary = `${salt.entity || "fara entity"} | x:${String(salt.x)} y:${String(salt.y)} w:${String(salt.w)} h:${String(salt.h)} prag:${String(salt.low_threshold)}%`;
 
     const rows = markers.length
       ? markers.map((m, idx) => `
@@ -1589,27 +1596,35 @@ class ApaMenajeraCardEditor extends HTMLElement {
             <label>Culoare text etichete</label>
             <input id="marker-text-color" type="color" value="${this._escape(markerTextColor)}" />
           </div>
-          <h3>Nivel Sare (bara AMA)</h3>
-          <div class="field">
-            <label>Senzor nivel sare</label>
-            <input id="salt-entity" type="text" value="${this._escape(salt.entity || "")}" placeholder="sensor.ama_nivel_sare" />
-          </div>
-          <div class="field">
-            <label>Eticheta (optional)</label>
-            <input id="salt-label" type="text" value="${this._escape(salt.label || "")}" placeholder="Sare" />
-          </div>
-          <div class="field">
-            <div class="salt-grid">
-              <input id="salt-x" type="number" step="1" value="${String(salt.x)}" placeholder="x" />
-              <input id="salt-y" type="number" step="1" value="${String(salt.y)}" placeholder="y" />
-              <input id="salt-threshold" type="number" step="1" min="0" max="100" value="${String(salt.low_threshold)}" placeholder="prag rosu %" />
-            </div>
-          </div>
-          <div class="field">
-            <div class="salt-grid">
-              <input id="salt-w" type="number" step="1" min="6" value="${String(salt.w)}" placeholder="latime" />
-              <input id="salt-h" type="number" step="1" min="30" value="${String(salt.h)}" placeholder="inaltime" />
-              <label class="inline-check"><input id="salt-show-value" type="checkbox" ${salt.show_value === false ? "" : "checked"} />Afiseaza %</label>
+          <h3>Nivel Sare</h3>
+          <div class="row">
+            <button class="row-toggle" id="salt-toggle" type="button">
+              <span class="row-title">Nivel Sare (bara AMA)</span>
+              <span class="row-sub">${this._escape(saltSummary)}</span>
+            </button>
+            <div class="row-body ${this._openSalt ? "open" : ""}">
+              <div class="field">
+                <label>Senzor nivel sare</label>
+                <input id="salt-entity" type="text" value="${this._escape(salt.entity || "")}" placeholder="sensor.ama_nivel_sare" />
+              </div>
+              <div class="field">
+                <label>Eticheta (optional)</label>
+                <input id="salt-label" type="text" value="${this._escape(salt.label || "")}" placeholder="Sare" />
+              </div>
+              <div class="field">
+                <div class="salt-grid">
+                  <input id="salt-x" type="number" step="1" value="${String(salt.x)}" placeholder="x" />
+                  <input id="salt-y" type="number" step="1" value="${String(salt.y)}" placeholder="y" />
+                  <input id="salt-threshold" type="number" step="1" min="0" max="100" value="${String(salt.low_threshold)}" placeholder="prag rosu %" />
+                </div>
+              </div>
+              <div class="field">
+                <div class="salt-grid">
+                  <input id="salt-w" type="number" step="1" min="6" value="${String(salt.w)}" placeholder="latime" />
+                  <input id="salt-h" type="number" step="1" min="30" value="${String(salt.h)}" placeholder="inaltime" />
+                  <label class="inline-check"><input id="salt-show-value" type="checkbox" ${salt.show_value === false ? "" : "checked"} />Afiseaza %</label>
+                </div>
+              </div>
             </div>
           </div>
           <h3>Senzori (Markers)</h3>
@@ -1672,6 +1687,10 @@ class ApaMenajeraCardEditor extends HTMLElement {
     }
     if (saltShowValueEl) {
       saltShowValueEl.addEventListener("change", (ev) => this._onSaltFieldChange("show_value", ev.target.checked));
+    }
+    const saltToggleEl = this.shadowRoot.getElementById("salt-toggle");
+    if (saltToggleEl) {
+      saltToggleEl.addEventListener("click", () => this._toggleSalt());
     }
 
     const addBtn = this.shadowRoot.getElementById("add-marker");
