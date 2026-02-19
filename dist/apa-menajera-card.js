@@ -174,6 +174,7 @@ class ApaMenajeraCard extends HTMLElement {
       marker_label_bg_color: "#ffffff",
       marker_label_bg_opacity: 0.8,
       marker_label_text_color: "#ff9933",
+      show_card_details: true,
       salt_level: null,
       filter_reset_entity: "input_number.filtru_zile_ramase",
       filter_reset_value: 30,
@@ -226,6 +227,7 @@ class ApaMenajeraCard extends HTMLElement {
       markerLabelBgColor: config.marker_label_bg_color ?? "#ffffff",
       markerLabelBgOpacity: Number.isFinite(Number(config.marker_label_bg_opacity)) ? Number(config.marker_label_bg_opacity) : 0.8,
       markerLabelTextColor: config.marker_label_text_color ?? "#ff9933",
+      showCardDetails: config.show_card_details !== false,
       saltLevel,
       filterResetEntity: config.filter_reset_entity ?? "input_number.filtru_zile_ramase",
       filterResetValue: Number.isFinite(Number(config.filter_reset_value)) ? Number(config.filter_reset_value) : 30,
@@ -606,10 +608,12 @@ class ApaMenajeraCard extends HTMLElement {
 
       <ha-card class="card">
         <div class="wrap" id="wrap">
+          ${c.showCardDetails === false ? "" : `
           <div class="header">
             <div class="title">${c.title ? this._escape(c.title) : ""}</div>
             <div class="badge">v${CARD_VERSION}</div>
           </div>
+          `}
           <img class="bg" id="bg" alt="background" />
           <div id="ovls"></div>
           <svg class="overlay" id="svg" viewBox="0 0 ${vb.w} ${vb.h}" preserveAspectRatio="xMidYMid meet"></svg>
@@ -1367,6 +1371,12 @@ class ApaMenajeraCardEditor extends HTMLElement {
     this._emitConfig(next);
   }
 
+  _onShowCardDetailsChange(ev) {
+    const next = { ...(this._config || {}), show_card_details: !!ev.target.checked };
+    this._config = next;
+    this._emitConfig(next);
+  }
+
   _onSaltFieldChange(field, rawValue) {
     const next = { ...(this._config || {}) };
     const salt = this._getNormalizedSaltConfig(next);
@@ -1507,6 +1517,7 @@ class ApaMenajeraCardEditor extends HTMLElement {
     const markerBgColor = c.marker_label_bg_color || "#ffffff";
     const markerBgOpacity = Number.isFinite(Number(c.marker_label_bg_opacity)) ? Number(c.marker_label_bg_opacity) : 0.8;
     const markerTextColor = c.marker_label_text_color || "#ff9933";
+    const showCardDetails = c.show_card_details !== false;
     const salt = this._getNormalizedSaltConfig(c);
     const saltSummary = `${salt.entity || "fara entity"} | x:${String(salt.x)} y:${String(salt.y)} w:${String(salt.w)} h:${String(salt.h)} prag:${String(salt.low_threshold)}%`;
 
@@ -1698,6 +1709,9 @@ class ApaMenajeraCardEditor extends HTMLElement {
             <label>Culoare text etichete</label>
             <input id="marker-text-color" type="color" value="${this._escape(markerTextColor)}" />
           </div>
+          <div class="field">
+            <label class="inline-check"><input id="show-card-details" type="checkbox" ${showCardDetails ? "checked" : ""} />Detalii card</label>
+          </div>
           <h3>Nivel Sare</h3>
           <div class="row">
             <button class="row-toggle" id="salt-toggle" type="button">
@@ -1743,6 +1757,7 @@ class ApaMenajeraCardEditor extends HTMLElement {
     const markerBgColorEl = this.shadowRoot.getElementById("marker-bg-color");
     const markerBgOpacityEl = this.shadowRoot.getElementById("marker-bg-opacity");
     const markerTextColorEl = this.shadowRoot.getElementById("marker-text-color");
+    const showCardDetailsEl = this.shadowRoot.getElementById("show-card-details");
     const saltEntityEl = this.shadowRoot.getElementById("salt-entity");
     const saltLabelEl = this.shadowRoot.getElementById("salt-label");
     const saltXEl = this.shadowRoot.getElementById("salt-x");
@@ -1765,6 +1780,9 @@ class ApaMenajeraCardEditor extends HTMLElement {
     }
     if (markerTextColorEl) {
       markerTextColorEl.addEventListener("change", (ev) => this._onMarkerTextColorChange(ev));
+    }
+    if (showCardDetailsEl) {
+      showCardDetailsEl.addEventListener("change", (ev) => this._onShowCardDetailsChange(ev));
     }
     if (saltEntityEl) {
       saltEntityEl.addEventListener("change", (ev) => this._onSaltFieldChange("entity", ev.target.value));
