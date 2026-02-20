@@ -87,11 +87,21 @@ function fmtState(stateObj) {
   if (!stateObj) return "â€”";
   const s = stateObj.state;
   if (s === "unknown" || s === "unavailable") return "â€”";
-  const n = Number(s);
-  const text = Number.isFinite(n)
-    ? String(Math.round((n + Number.EPSILON) * 100) / 100)
-    : `${s}`;
   const unit = stateObj.attributes?.unit_of_measurement ? stateObj.attributes.unit_of_measurement : "";
+  const unitNorm = norm(unit).replace(/\s+/g, "");
+  const n = Number(s);
+  let text = `${s}`;
+  if (Number.isFinite(n)) {
+    // Pressure markers: always 2 decimals (ex: 1.99 bar)
+    if (["bar", "mbar", "psi", "kpa", "pa"].includes(unitNorm)) {
+      text = n.toFixed(2);
+    // Temperature markers: always 1 decimal (ex: 7.2 °C)
+    } else if (["°c", "c", "°f", "f"].includes(unitNorm)) {
+      text = n.toFixed(1);
+    } else {
+      text = String(Math.round((n + Number.EPSILON) * 100) / 100);
+    }
+  }
   return unit ? `${text} ${unit}` : `${text}`;
 }
 
