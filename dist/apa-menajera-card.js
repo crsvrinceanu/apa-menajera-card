@@ -87,8 +87,12 @@ function fmtState(stateObj) {
   if (!stateObj) return "â€”";
   const s = stateObj.state;
   if (s === "unknown" || s === "unavailable") return "â€”";
+  const n = Number(s);
+  const text = Number.isFinite(n)
+    ? String(Math.round((n + Number.EPSILON) * 100) / 100)
+    : `${s}`;
   const unit = stateObj.attributes?.unit_of_measurement ? stateObj.attributes.unit_of_measurement : "";
-  return unit ? `${s} ${unit}` : `${s}`;
+  return unit ? `${text} ${unit}` : `${text}`;
 }
 
 function numState(stateObj) {
