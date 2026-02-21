@@ -42,6 +42,15 @@ function clamp(n, min, max) {
   return Math.min(max, Math.max(min, n));
 }
 
+function normalizeViewbox(raw) {
+  const w = Number(raw?.w);
+  const h = Number(raw?.h);
+  return {
+    w: Number.isFinite(w) && w > 0 ? w : DEFAULT_VIEWBOX.w,
+    h: Number.isFinite(h) && h > 0 ? h : DEFAULT_VIEWBOX.h,
+  };
+}
+
 function colorWithOpacity(color, opacity, fallback = "rgba(255, 255, 255, .8)") {
   const c = String(color ?? "").trim();
   const a = clamp(Number(opacity), 0, 1);
@@ -232,7 +241,7 @@ class ApaMenajeraCard extends HTMLElement {
       markers,
       flows: Array.isArray(config.flows) ? config.flows : [],
       debug: !!config.debug,
-      viewbox: config.viewbox ?? DEFAULT_VIEWBOX,
+      viewbox: normalizeViewbox(config.viewbox),
 
       imageFit: config.image_fit ?? "contain",            // contain | cover
       imagePosition: config.image_position ?? "center",
@@ -1365,6 +1374,61 @@ class ApaMenajeraCardEditor extends HTMLElement {
     this._emitConfig(next);
   }
 
+  _onViewboxFieldChange(field, rawValue) {
+    const next = { ...(this._config || {}) };
+    const vb = normalizeViewbox(next.viewbox);
+    const n = Number(rawValue);
+    if (!Number.isFinite(n) || n <= 0) return;
+    vb[field] = Math.round(n);
+    next.viewbox = vb;
+    this._config = next;
+    this._emitConfig(next);
+  }
+
+  _onImageFitChange(ev) {
+    const fit = String(ev.target.value || "contain").trim();
+    const allowed = new Set(["contain", "cover", "fill", "none", "scale-down"]);
+    const next = { ...(this._config || {}), image_fit: allowed.has(fit) ? fit : "contain" };
+    this._config = next;
+    this._emitConfig(next);
+  }
+
+  _onImagePositionChange(ev) {
+    const raw = String(ev.target.value ?? "").trim();
+    const next = { ...(this._config || {}) };
+    if (!raw) {
+      delete next.image_position;
+    } else {
+      next.image_position = raw;
+    }
+    this._config = next;
+    this._emitConfig(next);
+  }
+
+  _onMaxWidthChange(ev) {
+    const raw = String(ev.target.value ?? "").trim();
+    const next = { ...(this._config || {}) };
+    if (!raw) {
+      delete next.max_width;
+    } else {
+      next.max_width = raw;
+    }
+    this._config = next;
+    this._emitConfig(next);
+  }
+
+  _onMaxHeightChange(ev) {
+    const raw = String(ev.target.value ?? "").trim();
+    const next = { ...(this._config || {}) };
+    if (!raw) {
+      delete next.max_height;
+    } else {
+      next.max_height = raw;
+    }
+    this._config = next;
+    this._emitConfig(next);
+  }
+
   _onMarkerBgColorChange(ev) {
     const next = { ...(this._config || {}), marker_label_bg_color: ev.target.value || "#ffffff" };
     this._config = next;
@@ -1528,6 +1592,11 @@ class ApaMenajeraCardEditor extends HTMLElement {
     const c = this._config || {};
     const markers = Array.isArray(c.markers) ? c.markers : [];
     const bg = (typeof c.background === "string") ? c.background : "";
+    const vb = normalizeViewbox(c.viewbox);
+    const imageFit = String(c.image_fit || "contain");
+    const imagePosition = String(c.image_position || "center");
+    const maxWidth = (c.max_width == null) ? "1100px" : String(c.max_width);
+    const maxHeight = (c.max_height == null) ? "" : String(c.max_height);
     const markerBgColor = c.marker_label_bg_color || "#ffffff";
     const markerBgOpacity = Number.isFinite(Number(c.marker_label_bg_opacity)) ? Number(c.marker_label_bg_opacity) : 0.8;
     const markerTextColor = c.marker_label_text_color || "#ff9933";
@@ -1712,6 +1781,22 @@ class ApaMenajeraCardEditor extends HTMLElement {
             <input id="background" type="text" value="${this._escape(bg)}" placeholder="/hacsfiles/apa-menajera-card/card.png" />
           </div>
           <div class="field">
+            <label>ViewBox baza (latime / inaltime)</label>
+            <div class="salt-grid">
+              <input id="viewbox-w" type="number" min="1" step="1" value="${String(vb.w)}" placeholder="latime viewbox" />
+              <input id="viewbox-h" type="number" min="1" step="1" value="${String(vb.h)}" placeholder="inaltime viewbox" />
+              <input id="image-fit" type="text" value="${this._escape(imageFit)}" placeholder="contain | cover | fill" />
+            </div>
+          </div>
+          <div class="field">
+            <label>Scalare fundal (responsive)</label>
+            <div class="salt-grid">
+              <input id="image-position" type="text" value="${this._escape(imagePosition)}" placeholder="center / top / 50% 40%" />
+              <input id="max-width" type="text" value="${this._escape(maxWidth)}" placeholder="1100px / 100% / 90vw" />
+              <input id="max-height" type="text" value="${this._escape(maxHeight)}" placeholder="optional: 70vh" />
+            </div>
+          </div>
+          <div class="field">
             <label>Culoare fundal etichete</label>
             <input id="marker-bg-color" type="color" value="${this._escape(markerBgColor)}" />
           </div>
@@ -1768,6 +1853,12 @@ class ApaMenajeraCardEditor extends HTMLElement {
 
     const titleEl = this.shadowRoot.getElementById("title");
     const bgEl = this.shadowRoot.getElementById("background");
+    const viewboxWEl = this.shadowRoot.getElementById("viewbox-w");
+    const viewboxHEl = this.shadowRoot.getElementById("viewbox-h");
+    const imageFitEl = this.shadowRoot.getElementById("image-fit");
+    const imagePositionEl = this.shadowRoot.getElementById("image-position");
+    const maxWidthEl = this.shadowRoot.getElementById("max-width");
+    const maxHeightEl = this.shadowRoot.getElementById("max-height");
     const markerBgColorEl = this.shadowRoot.getElementById("marker-bg-color");
     const markerBgOpacityEl = this.shadowRoot.getElementById("marker-bg-opacity");
     const markerTextColorEl = this.shadowRoot.getElementById("marker-text-color");
@@ -1785,6 +1876,24 @@ class ApaMenajeraCardEditor extends HTMLElement {
     }
     if (bgEl) {
       bgEl.addEventListener("change", (ev) => this._onBackgroundChange(ev));
+    }
+    if (viewboxWEl) {
+      viewboxWEl.addEventListener("change", (ev) => this._onViewboxFieldChange("w", ev.target.value));
+    }
+    if (viewboxHEl) {
+      viewboxHEl.addEventListener("change", (ev) => this._onViewboxFieldChange("h", ev.target.value));
+    }
+    if (imageFitEl) {
+      imageFitEl.addEventListener("change", (ev) => this._onImageFitChange(ev));
+    }
+    if (imagePositionEl) {
+      imagePositionEl.addEventListener("change", (ev) => this._onImagePositionChange(ev));
+    }
+    if (maxWidthEl) {
+      maxWidthEl.addEventListener("change", (ev) => this._onMaxWidthChange(ev));
+    }
+    if (maxHeightEl) {
+      maxHeightEl.addEventListener("change", (ev) => this._onMaxHeightChange(ev));
     }
     if (markerBgColorEl) {
       markerBgColorEl.addEventListener("change", (ev) => this._onMarkerBgColorChange(ev));
